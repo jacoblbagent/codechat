@@ -28,7 +28,16 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   stages, commits or pushes.
 - **Chat panel** — streaming responses from any OpenRouter model (default
   `deepseek/deepseek-v4.1-flash`), toggled with `Ctrl+Alt+C`, resizable by dragging
-  its edge. The panel can:
+  its edge.
+  - **Sessions.** The panel holds several conversations at once, one tab each,
+    under the header. `+` (or `Ctrl+Shift+K`) opens a new one and `×` closes it;
+    a tab is named after the first thing you ask it. Each session owns its own
+    transcript, request, `Ctrl+L` attachment, draft, context switches and scroll
+    position, so nothing bleeds between them — and a request that is still
+    streaming keeps running when you switch away, marked with a dot on its tab,
+    and lands in its own conversation when it finishes. Sessions are saved to
+    `localStorage` and come back on reload (the last 20, transcripts capped).
+  - The panel can:
   - send the **active file** and your **current selection** as context (per-request toggles),
   - **Insert** any code block it returns at the cursor or over a selection,
   - **Replace file** — write a block straight into the file you have open (the
@@ -88,7 +97,7 @@ Prefer to bake one in for local use? Copy `.env.example` to `.env.local` and set
 | `Ctrl+P` | Quick open a file |
 | `Ctrl+S` | Save the active file (writes to disk for real folders) |
 | `Ctrl+B` | Toggle the side bar |
-| `Ctrl+Shift+K` | New chat |
+| `Ctrl+Shift+K` | New chat session (a new tab) |
 | `Ctrl+,` | Open the settings page |
 | `Enter` / `Shift+Enter` | Send message / newline in the chat box |
 | `Esc` | Close the quick-open palette or the settings page |
@@ -118,7 +127,7 @@ Pages on every push to `main`.
 ```
 index.html          full IDE shell (title bar → status bar)
 src/main.ts         app wiring: tabs, tree, commands, settings, layout
-src/chat.ts         chat panel: streaming, markdown rendering, code actions
+src/chat.ts         chat panel: sessions, streaming, markdown rendering, code actions
 src/deepseek.ts     OpenRouter client (SSE) + the request shape
 src/models.ts       the OpenRouter catalogue: fetch, cache, search, formatting
 src/model-picker.ts the searchable model picker (chat header + Settings)
@@ -139,6 +148,10 @@ src/styles.css      One Dark Pro inspired styling
   and file-picker fallbacks.
 - No terminal and no extension host. Syntax highlighting covers ~30 languages; only
   JSON/CSS/HTML/TS/JS get language-service features (completion, hover, syntax errors).
+- Chat sessions live in `localStorage`, so they are per-browser and cleared with site
+  data. The last 20 are kept and each transcript is capped at its 60 most recent
+  turns; if the origin is over quota the app falls back to saving only the session
+  you are using rather than dropping all of them.
 - The model list is a **snapshot**: it is fetched once and cached for a day, so a model
   released in the last few hours may be missing. Type its id in the picker and it will be
   used anyway. Prices and context windows come from OpenRouter and are shown, not enforced
