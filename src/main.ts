@@ -1,6 +1,6 @@
 import './styles.css'
 import { ChatPanel, type ChatStatus } from './chat'
-import { DEFAULT_MODEL, MODELS, type ReasoningEffort } from './deepseek'
+import { DEFAULT_MODEL, type ReasoningEffort } from './deepseek'
 import {
   defineTheme,
   editorOptions,
@@ -13,6 +13,8 @@ import {
   type ThemeName,
   uriFor,
 } from './monaco'
+import { buildMonacoOptions, defaultCore, settingById, type SettingDef } from './settings'
+import { SettingsPage } from './settings-ui'
 import { Workspace, type SearchHit } from './workspace'
 
 /* ══════════════════════════════════════════════════════════════
@@ -23,6 +25,8 @@ interface Settings {
   apiKey: string
   model: string
   reasoning: ReasoningEffort
+  /** VS Code core settings, keyed by their dotted id (e.g. 'editor.fontSize'). */
+  core: Record<string, unknown>
 }
 
 interface UiState {
@@ -40,12 +44,15 @@ const ENV_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY as string | undefined) 
 const REASONING_LEVELS: ReasoningEffort[] = ['off', 'low', 'medium', 'high']
 
 function loadSettings(): Settings {
-  const fallback: Settings = { apiKey: ENV_KEY, model: DEFAULT_MODEL, reasoning: 'off' }
+  const fallback: Settings = { apiKey: ENV_KEY, model: DEFAULT_MODEL, reasoning: 'off', core: {} }
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (!raw) return fallback
     const merged = { ...fallback, ...(JSON.parse(raw) as Partial<Settings>) }
     if (!REASONING_LEVELS.includes(merged.reasoning)) merged.reasoning = 'off'
+    // Anything unknown is dropped, so a stale or hand-edited entry can never
+    // reach the editor options; anything missing falls back to the catalogue.
+    merged.core = { ...defaultCore(), ...(merged.core ?? {}) }
     return merged
   } catch {
     return fallback
@@ -57,6 +64,59 @@ function saveSettings(s: Settings): void {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(s))
   } catch {
     /* private mode — keep it in memory */
+  }
+}
+
+/* ── Files: save-time rewrites and auto save ──────────────────
+   Declared up here because the editor's content-change handler (registered
+   when the editor is created) calls scheduleAutoSave on every keystroke. */
+
+let autoSaveTimer: number | null = null
+let autoSaveWarned = false
+
+/** Rewrites applied to the buffer on save, in VS Code's order. */
+function applySaveTransforms(text: string): string {
+  let out = text
+  if (coreBool('files.trimTrailingWhitespace')) out = out.replace(/[ \t]+$/gm, '')
+  if (coreBool('files.trimFinalNewlines')) out = out.replace(/\n+$/, '')
+  if (coreBool('files.insertFinalNewline') && !out.endsWith('\n')) out += '\n'
+  return out
+}
+
+function scheduleAutoSave(): void {
+  if (autoSaveTimer !== null) {
+    clearTimeout(autoSaveTimer)
+    autoSaveTimer = null
+  }
+  if (coreValue('files.autoSave') !== 'afterDelay') return
+  autoSaveTimer = window.setTimeout(() => {
+    autoSaveTimer = null
+    void runAutoSave()
+  }, coreNumber('files.autoSaveDelay', 1000))
+}
+
+/**
+ * Auto save only means anything against a real directory on disk — the built-in
+ * demo workspace has no files to write, so this is a no-op there.
+ */
+async function runAutoSave(): Promise<void> {
+  const path = activePath
+  if (!workspace.isRealDirectory || !path) return
+  const file = workspace.get(path)
+  const model = editor.getModel()
+  if (!file?.handle || file.binary || !model) return
+  if (!workspace.isDirty(path)) return
+  try {
+    await workspace.save(path, model.getValue())
+    autoSaveWarned = false
+    renderTabs()
+    renderTree()
+  } catch (err) {
+    // Never spam: one toast until a save succeeds again. Ctrl+S still reports.
+    if (!autoSaveWarned) {
+      autoSaveWarned = true
+      toast(`Auto save failed: ${(err as Error).message}`, 'err')
+    }
   }
 }
 
@@ -125,9 +185,6 @@ const els = {
   sbProblems: $('sb-problems'),
   sbAi: $('sb-ai'),
   sbBranchName: $('sb-branch-name'),
-  setKey: $<HTMLInputElement>('set-key'),
-  setModel: $<HTMLSelectElement>('set-model'),
-  setModelCustom: $<HTMLInputElement>('set-model-custom'),
   thinkSelect: $<HTMLSelectElement>('think-select'),
   chatDot: $('chat-dot'),
 }
@@ -184,11 +241,16 @@ function toast(message: string, kind: 'ok' | 'err' | 'info' = 'info', ms = 3200)
 
 defineTheme()
 
-const editor = monaco.editor.create(els.editorHost, {
+// The catalogue supplies every editor option the settings page can change, and
+// it ships this app's own defaults, so it is spread over editorOptions().
+const initialOptions = {
   ...editorOptions(),
+  ...monacoCoreOptions(),
   model: null,
   value: '',
-})
+} as unknown as monaco.editor.IStandaloneEditorConstructionOptions
+
+const editor = monaco.editor.create(els.editorHost, initialOptions)
 
 // Ctrl+L with code highlighted: attach that chunk to the chat as context.
 // Bound on the editor so it fires with focus inside Monaco, and so it wins over
@@ -237,6 +299,7 @@ editor.onDidChangeModelContent(() => {
   renderTabs()
   renderTree()
   if (chat) chat.refreshContextViz()
+  scheduleAutoSave()
 })
 
 monaco.editor.onDidChangeMarkers((uris) => {
@@ -272,6 +335,8 @@ function modelFor(path: string, content: string): monaco.editor.ITextModel {
    ══════════════════════════════════════════════════════════════ */
 
 function openFile(path: string, keepFocus = false): void {
+  // Opening a file always leaves the settings page.
+  settingsPage.close()
   const file = workspace.get(path)
   if (!file) {
     toast(`No such file: ${path}`, 'err')
@@ -704,15 +769,20 @@ function createFileFromCode(code: string, lang: string): void {
   }
 }
 
+/** The gear opens the settings page in the editor area, like VS Code. */
 function openSettings(): void {
-  setView('settings')
-  if (isNarrow()) setSidebarOpen(true)
-  els.setKey.focus()
+  settingsPage.open()
+  settingsPage.refresh()
 }
 
 chat = new ChatPanel({
   getContext: chatContext,
-  getConfig: () => settings,
+  getConfig: () => ({
+    apiKey: settings.apiKey,
+    model: settings.model,
+    reasoning: settings.reasoning,
+    maxContextChars: coreNumber('codechat.maxContextChars', 24000),
+  }),
   insertCode,
   applyToActiveFile,
   createFileFromCode,
@@ -1003,7 +1073,16 @@ async function saveActive(): Promise<void> {
   const model = editor.getModel()
   if (!model) return
   try {
-    const where = await workspace.save(activePath, model.getValue())
+    // files.* rewrites run before the write and join the undo stack, so one
+    // Ctrl+Z puts the raw text back.
+    const before = model.getValue()
+    const after = applySaveTransforms(before)
+    if (after !== before) {
+      editor.pushUndoStop()
+      editor.executeEdits('save-transforms', [{ range: model.getFullModelRange(), text: after }])
+      editor.pushUndoStop()
+    }
+    const where = await workspace.save(activePath, editor.getModel()?.getValue() ?? after)
     renderTabs()
     renderTree()
     toast(where === 'disk' ? `Saved ${activePath} to disk` : `Saved ${activePath} (in-memory workspace)`, 'ok')
@@ -1059,6 +1138,11 @@ window.addEventListener('keydown', (e) => {
     openQuickOpen()
     return
   }
+  if (mod && !e.shiftKey && e.key === ',') {
+    e.preventDefault()
+    openSettings()
+    return
+  }
   if (mod && e.key.toLowerCase() === 's') {
     e.preventDefault()
     void saveActive()
@@ -1076,6 +1160,10 @@ window.addEventListener('keydown', (e) => {
       closeQuickOpen()
       return
     }
+    if (settingsPage.isOpen) {
+      settingsPage.close()
+      return
+    }
     closeDrawers()
     return
   }
@@ -1089,55 +1177,143 @@ window.addEventListener('keydown', (e) => {
    Settings view
    ══════════════════════════════════════════════════════════════ */
 
-function syncSettingsForm(): void {
-  els.setKey.value = settings.apiKey
-  els.setModel.value = MODELS.some((m) => m.id === settings.model) ? settings.model : '__custom__'
-  els.setModelCustom.value = els.setModel.value === '__custom__' ? settings.model : ''
-  els.setModelCustom.classList.toggle('is-hidden', els.setModel.value !== '__custom__')
-  els.thinkSelect.value = settings.reasoning
+/* ══════════════════════════════════════════════════════════════
+   Settings
+   ══════════════════════════════════════════════════════════════ */
+
+/* One accessor layer over three backing stores: the app settings key, the
+   workbench UiState, and `settings.core` for the VS Code core settings. The
+   page in settings-ui.ts only ever talks to these. */
+
+function getSetting(def: SettingDef): unknown {
+  switch (def.id) {
+    case 'codechat.apiKey':
+      return settings.apiKey
+    case 'codechat.model':
+      return settings.model
+    case 'codechat.reasoning':
+      return settings.reasoning
+    case 'workbench.colorTheme':
+      return ui.theme
+    case 'workbench.sideBarWidth':
+      return ui.sidebarWidth
+    case 'workbench.chatPanelWidth':
+      return ui.chatWidth
+    default:
+      return settings.core[def.id] ?? def.default
+  }
 }
 
-els.setModel.addEventListener('change', () => {
-  els.setModelCustom.classList.toggle('is-hidden', els.setModel.value !== '__custom__')
+function isSettingModified(def: SettingDef): boolean {
+  const value = getSetting(def)
+  if (typeof def.default === 'number') return Number(value) !== def.default
+  return value !== def.default
+}
+
+/* Typed reads of a core setting, for the places that need a plain value. */
+function coreValue(id: string): unknown {
+  const def = settingById(id)
+  return def ? getSetting(def) : undefined
+}
+function coreNumber(id: string, fallback: number): number {
+  const value = Number(coreValue(id))
+  return Number.isFinite(value) ? value : fallback
+}
+function coreBool(id: string): boolean {
+  return coreValue(id) === true
+}
+
+/** The whole catalogue as nested Monaco options, so one updateOptions call covers it. */
+function monacoCoreOptions(): monaco.editor.IEditorOptions {
+  return buildMonacoOptions(getSetting) as unknown as monaco.editor.IEditorOptions
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
+}
+
+/** Push one setting's new value to whatever it drives. */
+function applySetting(def: SettingDef): void {
+  if (def.monaco) {
+    editor.updateOptions(monacoCoreOptions())
+    return
+  }
+  switch (def.id) {
+    case 'codechat.apiKey':
+      setChatStatus(settings.apiKey ? 'ready' : 'idle')
+      break
+    case 'codechat.model':
+      chat.refreshModelBadge()
+      break
+    case 'codechat.reasoning':
+      els.thinkSelect.value = settings.reasoning
+      break
+    case 'codechat.maxContextChars':
+      chat.refreshContextViz()
+      break
+    case 'workbench.colorTheme':
+    case 'workbench.sideBarWidth':
+    case 'workbench.chatPanelWidth':
+      applyUi()
+      editor.layout()
+      break
+    case 'files.autoSave':
+    case 'files.autoSaveDelay':
+      scheduleAutoSave()
+      break
+  }
+}
+
+/** Every settings write goes through here: store, persist, then apply. */
+function setSetting(def: SettingDef, value: unknown): void {
+  switch (def.id) {
+    case 'codechat.apiKey':
+      settings = { ...settings, apiKey: String(value) }
+      break
+    case 'codechat.model':
+      settings = { ...settings, model: String(value) || DEFAULT_MODEL }
+      break
+    case 'codechat.reasoning':
+      settings = { ...settings, reasoning: value as ReasoningEffort }
+      break
+    case 'workbench.colorTheme':
+      ui.theme = value === 'light' ? 'light' : 'dark'
+      break
+    case 'workbench.sideBarWidth':
+      ui.sidebarWidth = clamp(Number(value), 160, 500)
+      break
+    case 'workbench.chatPanelWidth':
+      ui.chatWidth = clamp(Number(value), 280, 760)
+      break
+    default:
+      settings = { ...settings, core: { ...settings.core, [def.id]: value } }
+  }
+  saveSettings(settings)
+  saveUi(ui)
+  applySetting(def)
+}
+
+function resetSetting(def: SettingDef): void {
+  setSetting(def, def.default)
+}
+
+const settingsPage = new SettingsPage({
+  get: getSetting,
+  isModified: isSettingModified,
+  set: setSetting,
+  reset: resetSetting,
 })
+
+document.getElementById('btn-open-settings')?.addEventListener('click', () => openSettings())
+
+// The chat's thinking selector and the settings page are two views of one value,
+// so each writes through the same setter and re-syncs the other.
 els.thinkSelect.addEventListener('change', () => {
-  const reasoning = els.thinkSelect.value as ReasoningEffort
-  settings = { ...settings, reasoning }
-  saveSettings(settings)
-  toast(reasoning === 'off' ? 'Thinking off' : `Thinking: ${reasoning}`, 'ok')
-})
-/** Read the settings form into `settings` and write it to localStorage. */
-function persistSettings(announce: boolean): void {
-  const model = els.setModel.value === '__custom__' ? els.setModelCustom.value.trim() : els.setModel.value
-  settings = {
-    apiKey: els.setKey.value.trim(),
-    model: model || DEFAULT_MODEL,
-    reasoning: els.thinkSelect.value as ReasoningEffort,
-  }
-  saveSettings(settings)
-  chat.refreshModelBadge()
-  setChatStatus(settings.apiKey ? 'ready' : 'idle')
-  if (announce) toast('Settings saved to this browser', 'ok')
-}
-
-document.getElementById('btn-save-settings')?.addEventListener('click', () => persistSettings(true))
-
-// Don't lose a key that was typed but never explicitly saved: commit it when
-// the field loses focus, and on Enter. localStorage is per-origin, so it then
-// survives reloads and rebuilds of this same address.
-els.setKey.addEventListener('change', () => persistSettings(false))
-els.setKey.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault()
-    persistSettings(true)
-  }
-})
-document.getElementById('btn-clear-key')?.addEventListener('click', () => {
-  settings = { ...settings, apiKey: '' }
-  saveSettings(settings)
-  els.setKey.value = ''
-  setChatStatus('idle')
-  toast('API key cleared', 'ok')
+  const def = settingById('codechat.reasoning')
+  if (!def) return
+  setSetting(def, els.thinkSelect.value)
+  settingsPage.refresh()
+  toast(settings.reasoning === 'off' ? 'Thinking off' : `Thinking: ${settings.reasoning}`, 'ok')
 })
 
 /* ══════════════════════════════════════════════════════════════
@@ -1154,7 +1330,7 @@ workspace.onChange(() => {
 })
 
 applyUi()
-syncSettingsForm()
+els.thinkSelect.value = settings.reasoning
 workspace.loadDemo()
 renderTree()
 renderTabs()

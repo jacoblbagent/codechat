@@ -20,6 +20,7 @@ export interface ChatContext {
 }
 
 export interface ChatConfig {
+  maxContextChars: number
   apiKey: string
   model: string
   reasoning: ReasoningEffort
@@ -35,8 +36,6 @@ export interface ChatDeps {
   openSettings: () => void
   onStatus: (status: ChatStatus) => void
 }
-
-const MAX_CONTEXT_CHARS = 24000
 
 const SYSTEM_PROMPT = [
   'You are DeepSeek, an expert programming assistant embedded in CodeChat —',
@@ -125,6 +124,12 @@ export class ChatPanel {
     pinLabel: HTMLElement
     vizBar: HTMLElement
     vizLegend: HTMLElement
+  }
+
+  /** Cap on the whole-file context block — set in the settings page. */
+  private get maxContextChars(): number {
+    const n = this.deps.getConfig().maxContextChars
+    return Number.isFinite(n) && n > 0 ? n : 24000
   }
 
   constructor(deps: ChatDeps) {
@@ -345,10 +350,10 @@ export class ChatPanel {
 
     if (this.el.include.checked && ctx.path) {
       const full = ctx.content
-      const truncated = full.length > MAX_CONTEXT_CHARS
-      const content = truncated ? full.slice(0, MAX_CONTEXT_CHARS) : full
+      const truncated = full.length > this.maxContextChars
+      const content = truncated ? full.slice(0, this.maxContextChars) : full
       blocks.push('', '---', `Active file: \`${ctx.path}\` (${lang})`, '```' + lang, content, '```')
-      if (truncated) blocks.push(`\n(Note: the file was truncated to ${MAX_CONTEXT_CHARS} characters.)`)
+      if (truncated) blocks.push(`\n(Note: the file was truncated to ${this.maxContextChars} characters.)`)
       segs.push({ kind: 'file', label: ctx.path.split('/').pop()!, chars: content.length, truncated })
     }
 
@@ -407,8 +412,8 @@ export class ChatPanel {
     if (truncated) {
       const warn = document.createElement('span')
       warn.className = 'ctx-chip is-warn'
-      warn.textContent = `file cut at ${fmtChars(MAX_CONTEXT_CHARS)}`
-      warn.title = `The whole-file block is capped at ${MAX_CONTEXT_CHARS.toLocaleString()} characters`
+      warn.textContent = `file cut at ${fmtChars(this.maxContextChars)}`
+      warn.title = `The whole-file block is capped at ${this.maxContextChars.toLocaleString()} characters`
       this.el.vizLegend.appendChild(warn)
     }
 

@@ -9,7 +9,13 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
 ## What it does
 
 - **VS Code shell** — title bar, activity bar, explorer, tabs, status bar, command palette
-  (`Ctrl+P`), search view, breadcrumbs, minimap, bracket-pair colouring.
+  (`Ctrl+P`), search view, minimap, bracket-pair colouring.
+- **Settings page** (`Ctrl+,`, or the gear) — opens in the editor area, the way VS Code
+  opens settings in a tab. Two sections: **VS Code core settings** (Editor: Font / Cursor /
+  Indentation / Display / Minimap / Scrolling / Suggestions / Editing, plus Workbench and
+  Files) and **CodeChat**, for the settings this app adds on top. Every control applies
+  immediately, sits behind a search box that matches names, ids and descriptions, and shows
+  a coloured gutter plus a reset arrow when it differs from the default.
 - **Real files** — *Open Folder* loads a directory from your machine via the File System
   Access API (Chrome/Edge) and `Ctrl+S` writes changes back to disk. Browsers without the
   picker fall back to `<input type="file">` / drag-and-drop, and an in-memory demo
@@ -48,8 +54,9 @@ npm install
 npm run dev      # http://localhost:5176
 ```
 
-Then open **Settings** (gear in the title bar) and paste an OpenRouter API key.
-The key is kept in `localStorage` only — it is never bundled or committed.
+Then open **Settings** (`Ctrl+,`, or the gear in the title bar) and paste an OpenRouter
+API key into the **CodeChat** section. The key is kept in `localStorage` only — it is
+never bundled or committed.
 
 Prefer to bake one in for local use? Copy `.env.example` to `.env.local` and set
 `VITE_OPENROUTER_API_KEY` — useful for a private deploy, never for a public one.
@@ -65,8 +72,9 @@ Prefer to bake one in for local use? Copy `.env.example` to `.env.local` and set
 | `Ctrl+S` | Save the active file (writes to disk for real folders) |
 | `Ctrl+B` | Toggle the side bar |
 | `Ctrl+Shift+K` | New chat |
+| `Ctrl+,` | Open the settings page |
 | `Enter` / `Shift+Enter` | Send message / newline in the chat box |
-| `Esc` | Close the quick-open palette |
+| `Esc` | Close the quick-open palette or the settings page |
 
 ## Build & deploy
 
