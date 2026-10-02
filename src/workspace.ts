@@ -91,9 +91,15 @@ export function greetAll(names: string[]): string[] {
 
 const team = ['Ada', 'Grace', 'Alan']
 
+const list = document.createElement('ul')
+
 for (const line of greetAll(team)) {
-  console.log(line)
+  const item = document.createElement('li')
+  item.textContent = line
+  list.appendChild(item)
 }
+
+document.body.appendChild(list)
 `,
   },
   {
