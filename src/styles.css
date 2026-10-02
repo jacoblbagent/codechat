@@ -239,12 +239,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 /* Activity bar */
 .activitybar {
   background: var(--bg-activity);
+  border-right: 1px solid var(--border);
   display: flex; flex-direction: column; align-items: center;
   gap: 2px; padding-top: 4px;
 }
 .act-spacer { flex: 1; }
 .act-btn {
-  width: 48px; height: 48px; display: grid; place-items: center;
+  width: 47px; height: 48px; display: grid; place-items: center;
   color: var(--icon-idle); border-left: 2px solid transparent;
 }
 .act-btn:hover { color: var(--icon-active); }
