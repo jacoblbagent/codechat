@@ -94,6 +94,7 @@ const LANG_LABEL: Record<string, string> = {
 export function languageFor(name: string): string {
   const base = name.toLowerCase()
   if (base === 'dockerfile') return 'dockerfile'
+  if (base === '.gitignore' || base.endsWith('.gitignore')) return 'ignore'
   if (base.startsWith('.env')) return 'ini'
   const ext = base.includes('.') ? base.split('.').pop()! : ''
   return LANG_BY_EXT[ext] ?? 'plaintext'

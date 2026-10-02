@@ -287,6 +287,14 @@ for (const chord of [
 // on — it still flags real mistakes — and suggestion diagnostics are off so the
 // status bar only reports genuine problems.
 monaco.languages.typescript.typescriptDefaults.setEagerModelSync(true)
+// The demo workspace is a React project, so .tsx files have to be understood as
+// JSX rather than read as type assertions. Semantic checks stay off, but the
+// parser still needs to know what it is looking at.
+monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+  jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
+  allowNonTsExtensions: true,
+  target: monaco.languages.typescript.ScriptTarget.ES2020,
+})
 monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
   noSemanticValidation: true,
   noSyntaxValidation: false,
@@ -2001,7 +2009,7 @@ setChatStatus(settings.apiKey ? 'ready' : 'idle')
 setView('explorer')
 
 // Open the first demo file so the editor and chat context are live on load.
-openFile('src/greeting.ts', true)
+openFile('src/App.tsx', true)
 
 if (!settings.apiKey) {
   toast('Add your OpenRouter API key in Settings to start chatting', 'info', 6000)

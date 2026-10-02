@@ -33,6 +33,13 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   text; an unknown key, or a value of the wrong type, is skipped and named in the header.
   It holds your OpenRouter key in plain text and is stored in this browser with the rest of
   your settings — the header says so.
+- **A real project to open with** — the IDE boots on **Flowboard**, a React + Redux
+  Toolkit Kanban board: 38 files across `app/`, `components/`, `features/{board,card,
+  filters,labels}`, `hooks/`, `lib/`, `styles/` and `data/`, with a slice, memoized
+  selectors, a vitest suite, config files and a CI workflow. It is a real project's
+  shape, not five files named after their own contents, so the explorer, the search
+  panel, `Ctrl+P`, Source Control and the chat all have something worth pointing at.
+  See **The demo project** below for how it is stored.
 - **Real files** — *Open Folder* loads a directory from your machine via the File System
   Access API (Chrome/Edge) and `Ctrl+S` writes changes back to disk. Browsers without the
   picker fall back to `<input type="file">` / drag-and-drop, and an in-memory demo
@@ -109,6 +116,26 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   is a double tap rather than a zoom gesture. Panning and pinching the page still work,
   which a `user-scalable=no` viewport tag would have taken away.
 
+## The demo project
+
+The starter board lives in the repository as **real files** under
+[`demo/flowboard/`](demo/flowboard) — with their real extensions, so they can be
+read, diffed and linted like any other source. `src/demo.ts` pulls each one in as
+text with Vite's `?raw`, which is why nothing in there is ever executed or
+type-checked as part of the IDE: `tsconfig.json` only includes `src`, so the
+fixture's own `tsconfig.json`, `package.json` and React imports stay its own
+business.
+
+That choice matters for two reasons. Escaping a whole project into TypeScript
+string literals is unreadable and easy to corrupt, and a fake project made of
+stubbed files is obvious the moment anyone opens one. This way the file you open
+in the IDE is byte for byte the file in the repository — the `demo` suite asserts
+exactly that.
+
+Ask the assistant about any of it. `src/features/board/boardSlice.ts` is the
+interesting one: a normalised card map, a column that keeps its own order, and an
+undo snapshot for the destructive actions.
+
 ## Quick start
 
 ```bash
@@ -171,6 +198,7 @@ src/diff.ts         line-diff counts for the +12 −3 gutter
 src/credits-ui.ts   the read-only Credits row in Settings
 src/models.ts       the OpenRouter catalogue: fetch, cache, search, formatting
 src/model-picker.ts the searchable model picker (chat header + Settings)
+src/demo.ts         the starter project (Flowboard) as text, via ?raw imports
 src/settings.ts     settings catalogue (VS Code core + CodeChat)
 src/settings-ui.ts  settings page renderer, scope filter
 src/settings-json.ts settings.json: serialise, parse, patch by key, Monaco view
@@ -178,6 +206,7 @@ src/workspace.ts    in-memory + File System Access workspace, search, tree
 src/monaco.ts       editor factory, workers, One Dark themes, file icons
 src/markdown.ts     dependency-free markdown renderer
 src/styles.css      One Dark Pro inspired styling
+demo/flowboard/     the starter project, as real files (React + RTK Kanban board)
 ```
 
 ## Notes & limitations

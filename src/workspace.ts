@@ -2,10 +2,13 @@
  * Workspace layer.
  *
  * Two modes:
- *  - demo: a small in-memory starter project (always available)
+ *  - demo: an in-memory starter project — see `demo.ts`, which carries a React
+ *          Kanban board as text (always available)
  *  - real: a local directory opened via the File System Access API
  *          (Chrome/Edge). Files are read on demand and written back with Ctrl+S.
  */
+
+import { DEMO_FILES, DEMO_ROOT_NAME } from './demo'
 
 export interface WsFile {
   path: string
@@ -56,99 +59,8 @@ function isBinaryName(name: string): boolean {
   return BINARY_EXT.has(ext(name))
 }
 
-const DEMO_FILES: Array<{ path: string; content: string }> = [
-  {
-    path: 'src/greeting.ts',
-    content: `/**
- * Small starter module — ask DeepSeek in the right-hand panel to
- * refactor it, add tests, or fix the TODOs.
- */
-
-export interface GreetingOptions {
-  name: string
-  excited?: boolean
-  locale?: string
-}
-
-export function greet(options: GreetingOptions): string {
-  const { name, excited = false, locale = 'en-US' } = options
-
-  // TODO: use Intl to localise the salutation instead of hardcoding English.
-  const salutation = 'Hello'
-
-  const suffix = excited ? '!' : '.'
-  return \`\${salutation}, \${name}\${suffix}\`
-}
-
-export function greetAll(names: string[]): string[] {
-  return names.map((n) => greet({ name: n }))
-}
-`,
-  },
-  {
-    path: 'src/app.ts',
-    content: `import { greetAll } from './greeting'
-
-const team = ['Ada', 'Grace', 'Alan']
-
-const list = document.createElement('ul')
-
-for (const line of greetAll(team)) {
-  const item = document.createElement('li')
-  item.textContent = line
-  list.appendChild(item)
-}
-
-document.body.appendChild(list)
-`,
-  },
-  {
-    path: 'src/main.css',
-    content: `:root {
-  --bg: #101014;
-  --fg: #e8e8ea;
-}
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--fg);
-  font: 16px/1.5 system-ui, sans-serif;
-  display: grid;
-  place-items: center;
-  min-height: 100vh;
-}
-`,
-  },
-  {
-    path: 'package.json',
-    content: `{
-  "name": "demo-workspace",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "start": "tsx src/app.ts"
-  }
-}
-`,
-  },
-  {
-    path: 'README.md',
-    content: `# Demo workspace
-
-This is the in-memory starter project CodeChat ships with, so the editor and
-the chat panel have something real to talk about.
-
-- **Open Folder** loads a real directory from your machine (Chrome / Edge).
-- Ask the assistant on the right to explain, refactor, or test any file.
-- \`Ctrl+Alt+C\` toggles the chat panel; \`Ctrl+P\` is quick open.
-`,
-  },
-]
-
 export class Workspace {
-  rootName = 'demo-workspace'
+  rootName = DEMO_ROOT_NAME
   isRealDirectory = false
   files = new Map<string, WsFile>()
   /** Directories the user has collapsed in the explorer. */
@@ -165,7 +77,7 @@ export class Workspace {
 
   /* ── loading ──────────────────────────────────────────────── */
   loadDemo(): void {
-    this.rootName = 'demo-workspace'
+    this.rootName = DEMO_ROOT_NAME
     this.isRealDirectory = false
     this.collapsed.clear()
     this.files.clear()
