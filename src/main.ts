@@ -59,11 +59,12 @@ function saveSettings(s: Settings): void {
 /**
  * The theme the pre-paint script in index.html already resolved. Reading it
  * back avoids a second, possibly different, decision on first load.
+ *
+ * One Dark Pro (dark) is the default; light is only used once chosen.
  */
 function initialTheme(): ThemeName {
   const preset = document.documentElement.dataset.theme
-  if (preset === 'light' || preset === 'dark') return preset
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  return preset === 'light' ? 'light' : 'dark'
 }
 
 function loadUi(): UiState {
@@ -1006,7 +1007,8 @@ els.setModel.addEventListener('change', () => {
 els.setTemp.addEventListener('input', () => {
   els.tempVal.textContent = Number(els.setTemp.value).toFixed(2)
 })
-document.getElementById('btn-save-settings')?.addEventListener('click', () => {
+/** Read the settings form into `settings` and write it to localStorage. */
+function persistSettings(announce: boolean): void {
   const model = els.setModel.value === '__custom__' ? els.setModelCustom.value.trim() : els.setModel.value
   settings = {
     apiKey: els.setKey.value.trim(),
@@ -1016,7 +1018,20 @@ document.getElementById('btn-save-settings')?.addEventListener('click', () => {
   saveSettings(settings)
   chat.refreshModelBadge()
   setChatStatus(settings.apiKey ? 'ready' : 'idle')
-  toast('Settings saved to this browser', 'ok')
+  if (announce) toast('Settings saved to this browser', 'ok')
+}
+
+document.getElementById('btn-save-settings')?.addEventListener('click', () => persistSettings(true))
+
+// Don't lose a key that was typed but never explicitly saved: commit it when
+// the field loses focus, and on Enter. localStorage is per-origin, so it then
+// survives reloads and rebuilds of this same address.
+els.setKey.addEventListener('change', () => persistSettings(false))
+els.setKey.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    persistSettings(true)
+  }
 })
 document.getElementById('btn-clear-key')?.addEventListener('click', () => {
   settings = { ...settings, apiKey: '' }

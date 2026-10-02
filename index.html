@@ -15,7 +15,7 @@
           var raw = localStorage.getItem('codechat.ui.v1')
           var saved = raw && JSON.parse(raw).theme
           if (saved === 'dark' || saved === 'light') theme = saved
-          else if (window.matchMedia('(prefers-color-scheme: light)').matches) theme = 'light'
+          /* nothing saved — One Dark Pro (dark) is the default */
         } catch (e) {
           /* private mode / bad JSON — fall back to dark */
         }
@@ -193,7 +193,7 @@
               <input id="set-model-custom" class="field is-hidden" type="text" placeholder="vendor/model-id" />
               <label class="label" for="set-temp">Temperature <span id="temp-val" class="muted">0.2</span></label>
               <input id="set-temp" class="slider" type="range" min="0" max="1" step="0.05" value="0.2" />
-              <div class="hint">Stored in this browser only (localStorage). Never committed.</div>
+              <div class="hint">Stored in this browser only (localStorage), so it survives reloads and rebuilds at this address. Never committed or bundled.</div>
               <button class="btn btn-primary" id="btn-save-settings">Save settings</button>
               <button class="btn" id="btn-clear-key">Clear key</button>
             </div>

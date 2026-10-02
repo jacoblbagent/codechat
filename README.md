@@ -24,7 +24,7 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   browser tab has no `node_modules`).
 - **Light and dark themes** — the title-bar toggle (`Ctrl+Alt+T`) switches the whole IDE
   between **One Dark Pro** and **One Dark Pro Light**, Monaco editor palette included.
-  Your choice is remembered; with nothing saved, the OS preference is used.
+  Your choice is remembered; the default is One Dark Pro dark.
 - **Responsive layout** — below 900px the side bar and chat panel become off-canvas
   drawers over the editor with a tap-to-dismiss scrim, so the IDE works on a phone.
 
