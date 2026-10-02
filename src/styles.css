@@ -247,12 +247,25 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .act-btn {
   width: 47px; height: 48px; display: grid; place-items: center;
   color: var(--icon-idle); border-left: 2px solid transparent;
+  position: relative;
 }
+/* The one native codicon in the rail. The @font-face for `codicon` is already
+   in the bundle (Monaco ships the font for its own UI icons), so this glyph
+   costs nothing and is identical to the one VS Code draws. */
+.codicon-source-control {
+  font-family: codicon;
+  font-style: normal; font-weight: normal; font-size: 16px; line-height: 1;
+  display: block; text-align: center; -webkit-font-smoothing: antialiased;
+}
+.codicon-source-control::before { content: '\ea68'; }
 .act-btn:hover { color: var(--icon-active); }
 .act-btn.is-active { color: var(--icon-active); border-left-color: var(--icon-active); }
+/* VS Code puts the change count on the Source Control icon. */
 .act-btn.has-badge::after {
-  content: ''; position: absolute; margin: -14px 0 0 20px;
-  width: 6px; height: 6px; border-radius: 50%; background: var(--blue);
+  content: attr(data-badge); position: absolute; top: 6px; right: 7px;
+  min-width: 15px; height: 15px; padding: 0 4px; box-sizing: border-box;
+  border-radius: 8px; background: var(--blue-btn); color: var(--on-accent);
+  font: 600 9px/15px var(--ui); text-align: center;
 }
 
 /* Side bar */
@@ -278,6 +291,24 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .mini-btn.is-on { color: var(--blue); }
 
 .tree { overflow: auto; flex: 1; padding-bottom: 8px; }
+
+/* ── Source Control (a change list, not a git client) ──────── */
+.scm-pane { gap: 6px; }
+.scm-empty { display: flex; flex-direction: column; gap: 4px; padding: 6px 2px; font-size: 12px; }
+.scm-empty p { margin: 0; }
+.scm-list { display: flex; flex-direction: column; }
+.scm-file {
+  display: flex; align-items: center; gap: 5px;
+  height: var(--row); padding: 0 6px 0 3px;
+  cursor: pointer; font-size: 13px; color: var(--fg);
+}
+.scm-file:hover { background: var(--hover-overlay); }
+.scm-file svg { display: block; }
+.scm-mark { flex: none; width: 12px; text-align: center; font: 600 11px var(--mono); color: var(--yellow); }
+.scm-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scm-dir { color: var(--fg-dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scm-actions { margin-left: auto; display: flex; gap: 2px; flex: none; opacity: 0; }
+.scm-file:hover .scm-actions, .scm-file:focus-within .scm-actions { opacity: 1; }
 .row {
   display: flex; align-items: center; gap: 6px;
   height: var(--row); padding: 0 8px 0 6px;

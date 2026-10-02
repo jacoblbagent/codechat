@@ -20,6 +20,12 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   Access API (Chrome/Edge) and `Ctrl+S` writes changes back to disk. Browsers without the
   picker fall back to `<input type="file">` / drag-and-drop, and an in-memory demo
   workspace ships by default.
+- **Source Control** — the rail icon (VS Code's own codicon) opens a change list: every
+  file whose buffer has moved away from what was last read or written, with a count on
+  the icon, per-file **Save** / **Discard** and a **Save all**. Discard goes through the
+  undo stack, so it is one `Ctrl+Z` from being reversed. It is a *change list, not a git
+  client* — a static site in a browser tab has no repository to talk to, so nothing here
+  stages, commits or pushes.
 - **DeepSeek chat panel** — streaming responses from `deepseek/deepseek-v4.1-flash`,
   toggled with `Ctrl+Alt+C`, resizable by dragging its edge. The panel can:
   - send the **active file** and your **current selection** as context (per-request toggles),

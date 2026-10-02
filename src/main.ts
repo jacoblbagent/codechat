@@ -15,7 +15,7 @@ import {
 } from './monaco'
 import { buildMonacoOptions, defaultCore, settingById, type SettingDef } from './settings'
 import { SettingsPage } from './settings-ui'
-import { Workspace, type SearchHit } from './workspace'
+import { Workspace, type SearchHit, type WsFile } from './workspace'
 
 /* ══════════════════════════════════════════════════════════════
    Settings + UI state (localStorage only — nothing leaves the browser)
@@ -107,10 +107,11 @@ async function runAutoSave(): Promise<void> {
   if (!file?.handle || file.binary || !model) return
   if (!workspace.isDirty(path)) return
   try {
-    await workspace.save(path, model.getValue())
+    await savePath(path)
     autoSaveWarned = false
     renderTabs()
     renderTree()
+    renderScm()
   } catch (err) {
     // Never spam: one toast until a save succeeds again. Ctrl+S still reports.
     if (!autoSaveWarned) {
@@ -185,6 +186,8 @@ const els = {
   sbProblems: $('sb-problems'),
   sbAi: $('sb-ai'),
   sbBranchName: $('sb-branch-name'),
+  scmList: $('scm-list'),
+  scmEmpty: $('scm-empty'),
   thinkSelect: $<HTMLSelectElement>('think-select'),
   chatDot: $('chat-dot'),
 }
@@ -298,6 +301,7 @@ editor.onDidChangeModelContent(() => {
   file.content = model.getValue()
   renderTabs()
   renderTree()
+  renderScm()
   if (chat) chat.refreshContextViz()
   scheduleAutoSave()
 })
@@ -329,6 +333,153 @@ function modelFor(path: string, content: string): monaco.editor.ITextModel {
   models.set(path, model)
   return model
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Source Control
+   ══════════════════════════════════════════════════════════════
+
+   A static browser IDE has no repository to talk to, so this deliberately does
+   not pretend to be git. What it can honestly know is which files have moved
+   away from what was last read or written — VS Code's "Changes" list without
+   the commit. Nothing here stages, commits or pushes. */
+
+function scmChangedFiles(): WsFile[] {
+  const out: WsFile[] = []
+  for (const file of workspace.files.values()) {
+    if (!file.binary && workspace.isDirty(file.path)) out.push(file)
+  }
+  return out.sort((a, b) => a.path.localeCompare(b.path))
+}
+
+function renderScm(): void {
+  const files = scmChangedFiles()
+  const list = els.scmList
+  const empty = els.scmEmpty
+  if (!list || !empty) return
+
+  empty.classList.toggle('is-hidden', files.length > 0)
+  list.replaceChildren()
+
+  for (const file of files) {
+    const row = document.createElement('div')
+    row.className = 'scm-file'
+    row.dataset.path = file.path
+    row.title = file.path
+
+    const mark = document.createElement('span')
+    mark.className = 'scm-mark'
+    mark.textContent = 'M'
+    mark.title = 'Modified'
+
+    const icon = document.createElement('span')
+    icon.className = 'row-icon'
+    icon.innerHTML = fileIcon(file.name)
+
+    const name = document.createElement('span')
+    name.className = 'scm-name'
+    name.textContent = file.name
+
+    const dir = document.createElement('span')
+    dir.className = 'scm-dir'
+    const cut = file.path.lastIndexOf('/')
+    dir.textContent = cut > 0 ? file.path.slice(0, cut + 1) : ''
+
+    const actions = document.createElement('span')
+    actions.className = 'scm-actions'
+    const buttons: Array<[string, string, string]> = [
+      ['save', '\u2713', `Save ${file.name}`],
+      ['discard', '\u21ba', `Discard changes in ${file.name}`],
+    ]
+    for (const [act, glyph, title] of buttons) {
+      const btn = document.createElement('button')
+      btn.className = 'mini-btn'
+      btn.dataset.scm = act
+      btn.title = title
+      btn.setAttribute('aria-label', title)
+      btn.textContent = glyph
+      actions.appendChild(btn)
+    }
+
+    row.append(mark, icon, name, dir, actions)
+    list.appendChild(row)
+  }
+
+  // VS Code shows the count on the activity-bar icon.
+  const btn = document.getElementById('btn-view-scm')
+  if (btn) {
+    btn.classList.toggle('has-badge', files.length > 0)
+    btn.dataset.badge = String(files.length)
+    btn.title = files.length
+      ? `Source Control \u2014 ${files.length} change${files.length === 1 ? '' : 's'}`
+      : 'Source Control'
+  }
+}
+
+async function saveScmFile(path: string): Promise<void> {
+  try {
+    const where = await savePath(path)
+    renderTabs()
+    renderTree()
+    renderScm()
+    toast(where === 'disk' ? `Saved ${path} to disk` : `Saved ${path} (in-memory workspace)`, 'ok')
+  } catch (err) {
+    toast(`Save failed: ${(err as Error).message}`, 'err')
+  }
+}
+
+/** Discard goes through executeEdits, so a mistaken click is one Ctrl+Z away. */
+function discardScmFile(path: string): void {
+  const file = workspace.get(path)
+  if (!file) return
+  const model = models.get(path)
+  if (model) {
+    editor.pushUndoStop()
+    editor.executeEdits('scm-discard', [{ range: model.getFullModelRange(), text: file.original }])
+    editor.pushUndoStop()
+  } else {
+    file.content = file.original
+  }
+  renderTabs()
+  renderTree()
+  renderScm()
+  if (chat) chat.refreshContextViz()
+  toast(`Discarded changes in ${path}`, 'ok')
+}
+
+els.scmList?.addEventListener('click', (e) => {
+  const target = e.target as HTMLElement
+  const row = target.closest<HTMLElement>('.scm-file')
+  if (!row) return
+  const path = row.dataset.path!
+  const act = target.closest<HTMLElement>('[data-scm]')?.dataset.scm
+  if (act === 'save') void saveScmFile(path)
+  else if (act === 'discard') discardScmFile(path)
+  else openFile(path)
+})
+
+document.getElementById('btn-scm-save-all')?.addEventListener('click', () => {
+  const files = scmChangedFiles()
+  if (!files.length) {
+    toast('Nothing to save', 'ok')
+    return
+  }
+  void (async () => {
+    const failed: string[] = []
+    for (const file of files) {
+      try {
+        await savePath(file.path)
+      } catch {
+        failed.push(file.path)
+      }
+    }
+    renderTabs()
+    renderTree()
+    renderScm()
+    const ok = files.length - failed.length
+    if (failed.length) toast(`Saved ${ok}, could not save ${failed.join(', ')}`, 'err')
+    else toast(`Saved ${ok} file${ok === 1 ? '' : 's'}`, 'ok')
+  })()
+})
 
 /* ══════════════════════════════════════════════════════════════
    Tabs
@@ -795,7 +946,7 @@ chat = new ChatPanel({
    Layout: view switching, chat toggle, resizer
    ══════════════════════════════════════════════════════════════ */
 
-type ViewName = 'explorer' | 'search' | 'settings'
+type ViewName = 'explorer' | 'search' | 'scm'
 
 function setView(view: ViewName): void {
   for (const panel of document.querySelectorAll<HTMLElement>('[data-view-panel]')) {
@@ -909,11 +1060,7 @@ function applyUi(): void {
 /* Activity bar */
 for (const btn of document.querySelectorAll<HTMLElement>('.act-btn[data-view]')) {
   btn.addEventListener('click', () => {
-    const view = btn.dataset.view as ViewName | 'chat'
-    if (view === 'chat') {
-      toggleChatPanel()
-      return
-    }
+    const view = btn.dataset.view as ViewName
     if (isNarrow()) {
       // Tapping the view that is already showing closes the drawer again.
       if (els.body.classList.contains('sidebar-open') && btn.classList.contains('is-active')) {
@@ -1068,23 +1215,32 @@ window.addEventListener('drop', async (e) => {
    Commands + keyboard
    ══════════════════════════════════════════════════════════════ */
 
+/** Write one workspace file, applying the files.* rewrites to its buffer first. */
+async function savePath(path: string): Promise<'disk' | 'memory'> {
+  const file = workspace.get(path)
+  if (!file) throw new Error(`No such file: ${path}`)
+  const model = models.get(path)
+  if (!model) return workspace.save(path, applySaveTransforms(file.content))
+  // files.* rewrites run before the write and join the undo stack, so one
+  // Ctrl+Z puts the raw text back.
+  const before = model.getValue()
+  const after = applySaveTransforms(before)
+  if (after !== before) {
+    editor.pushUndoStop()
+    editor.executeEdits('save-transforms', [{ range: model.getFullModelRange(), text: after }])
+    editor.pushUndoStop()
+  }
+  return workspace.save(path, model.getValue())
+}
+
 async function saveActive(): Promise<void> {
   if (!activePath) return
-  const model = editor.getModel()
-  if (!model) return
+  if (!editor.getModel()) return
   try {
-    // files.* rewrites run before the write and join the undo stack, so one
-    // Ctrl+Z puts the raw text back.
-    const before = model.getValue()
-    const after = applySaveTransforms(before)
-    if (after !== before) {
-      editor.pushUndoStop()
-      editor.executeEdits('save-transforms', [{ range: model.getFullModelRange(), text: after }])
-      editor.pushUndoStop()
-    }
-    const where = await workspace.save(activePath, editor.getModel()?.getValue() ?? after)
+    const where = await savePath(activePath)
     renderTabs()
     renderTree()
+    renderScm()
     toast(where === 'disk' ? `Saved ${activePath} to disk` : `Saved ${activePath} (in-memory workspace)`, 'ok')
   } catch (err) {
     toast(`Save failed: ${(err as Error).message}`, 'err')
@@ -1327,6 +1483,7 @@ function escapeHtml(s: string): string {
 workspace.onChange(() => {
   renderTree()
   renderTabs()
+  renderScm()
 })
 
 applyUi()

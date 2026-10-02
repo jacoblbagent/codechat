@@ -145,8 +145,10 @@
           <button class="act-btn" data-view="search" title="Search" aria-label="Search">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>
           </button>
-          <button class="act-btn" data-view="chat" title="AI Chat" aria-label="AI chat">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 12a8 8 0 0 1-8 8H7l-4 3v-7.5A8 8 0 0 1 11 4h2a8 8 0 0 1 8 8Z"/><path d="M9 12h6M9 9h4"/></svg>
+          <!-- The Source Control glyph is VS Code's own codicon (U+EA68), rendered
+               from the codicon font Monaco already ships — not a lookalike. -->
+          <button class="act-btn" id="btn-view-scm" data-view="scm" title="Source Control" aria-label="Source Control">
+            <i class="codicon-source-control" aria-hidden="true"></i>
           </button>
           <div class="act-spacer"></div>
           <button class="act-btn" id="btn-open-settings" title="Settings (Ctrl+,)" aria-label="Settings">
@@ -175,6 +177,22 @@
             <div class="pane-pad">
               <input id="search-input" class="field" type="search" placeholder="Search workspace…" aria-label="Search workspace" />
               <div id="search-results" class="search-results"></div>
+            </div>
+          </section>
+
+          <section class="view is-hidden" data-view-panel="scm">
+            <div class="view-head">
+              <span class="view-title">Source Control</span>
+              <span class="view-actions">
+                <button class="mini-btn" id="btn-scm-save-all" title="Save all changed files" aria-label="Save all changed files">Save all</button>
+              </span>
+            </div>
+            <div class="pane-pad scm-pane">
+              <div class="scm-empty is-hidden" id="scm-empty">
+                <p>No changes</p>
+                <p class="muted">A file you edit shows up here until you save or discard it.</p>
+              </div>
+              <div class="scm-list" id="scm-list"></div>
             </div>
           </section>
 
