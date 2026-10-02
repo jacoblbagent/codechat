@@ -1,11 +1,11 @@
 import {
   ApiError,
   DEFAULT_MODEL,
-  shortModelName,
   streamChat,
   type ChatMessage,
   type ReasoningEffort,
 } from './deepseek'
+import { shortModelName, vendorOf } from './models'
 import { renderMarkdown } from './markdown'
 
 export type ChatStatus = 'idle' | 'ready' | 'busy' | 'error'
@@ -120,6 +120,7 @@ export class ChatPanel {
     include: HTMLInputElement
     selection: HTMLInputElement
     model: HTMLElement
+    vendor: HTMLElement
     pin: HTMLElement
     pinLabel: HTMLElement
     vizBar: HTMLElement
@@ -148,6 +149,7 @@ export class ChatPanel {
       include: q('ctx-include') as HTMLInputElement,
       selection: q('ctx-selection') as HTMLInputElement,
       model: q('chat-model'),
+      vendor: q('chat-vendor'),
       pin: q('ctx-pin'),
       pinLabel: q('ctx-pin-label'),
       vizBar: q('ctx-viz-bar'),
@@ -250,8 +252,13 @@ export class ChatPanel {
 
   refreshModelBadge(): void {
     const { model } = this.deps.getConfig()
-    this.el.model.textContent = shortModelName(model || DEFAULT_MODEL)
-    this.el.model.title = model || DEFAULT_MODEL
+    const id = model || DEFAULT_MODEL
+    this.el.model.textContent = shortModelName(id)
+    this.el.model.title = id
+    // The header used to read "DeepSeek" unconditionally; now that any model
+    // is selectable, the label has to follow the picker or it lies.
+    this.el.vendor.textContent = vendorOf(id)
+    this.el.vendor.title = id
   }
 
   setActiveFile(path: string | null): void {

@@ -13,6 +13,7 @@ import {
   type ThemeName,
   uriFor,
 } from './monaco'
+import { ModelPicker } from './model-picker'
 import { buildMonacoOptions, defaultCore, settingById, type SettingDef } from './settings'
 import { SettingsPage } from './settings-ui'
 import { Workspace, type SearchHit, type WsFile } from './workspace'
@@ -926,6 +927,37 @@ function openSettings(): void {
   settingsPage.refresh()
 }
 
+/* ── Model selection ─────────────────────────────────────────
+   Two triggers, one picker: the chat header badge and the `codechat.model`
+   row in Settings. Both commit through `setSetting`, so the header, the
+   settings row and the outgoing request can never disagree about the model. */
+
+let chatPicker: ModelPicker | null = null
+let settingsModelPicker: ModelPicker | null = null
+
+/**
+ * One model, two triggers: after any change the header badge, the settings
+ * row label and both open pickers re-read the store. `applySetting` calls
+ * this, so it covers every route in — a picker, the reset arrow, storage.
+ */
+function syncModelSurfaces(): void {
+  settingsPage.refresh()
+  chatPicker?.sync()
+  settingsModelPicker?.sync()
+}
+
+/** The picker talks to the settings store, never to `settings` directly. */
+function modelPickerDeps(): ConstructorParameters<typeof ModelPicker>[1] {
+  return {
+    get: () => settings.model,
+    set: (id: string) => {
+      const def = settingById('codechat.model')
+      if (def) setSetting(def, id)
+    },
+    toasts: (message: string) => toast(message, 'ok'),
+  }
+}
+
 chat = new ChatPanel({
   getContext: chatContext,
   getConfig: () => ({
@@ -941,6 +973,11 @@ chat = new ChatPanel({
   openSettings,
   onStatus: setChatStatus,
 })
+
+const modelBtn = document.getElementById('btn-model')
+if (modelBtn) {
+  chatPicker = new ModelPicker(modelBtn, modelPickerDeps())
+}
 
 /* ══════════════════════════════════════════════════════════════
    Layout: view switching, chat toggle, resizer
@@ -1400,6 +1437,7 @@ function applySetting(def: SettingDef): void {
       break
     case 'codechat.model':
       chat.refreshModelBadge()
+      syncModelSurfaces()
       break
     case 'codechat.reasoning':
       els.thinkSelect.value = settings.reasoning
@@ -1458,6 +1496,27 @@ const settingsPage = new SettingsPage({
   isModified: isSettingModified,
   set: setSetting,
   reset: resetSetting,
+  // A live-options setting gets the same picker the chat header uses.
+  liveSelect: (_def, host, label) => {
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'sp-model-btn'
+    const text = document.createElement('span')
+    const chev = document.createElement('span')
+    chev.className = 'sp-model-btn-chev'
+    chev.textContent = '⌄'
+    chev.setAttribute('aria-hidden', 'true')
+    btn.append(text, chev)
+    host.appendChild(btn)
+    // It is a button, not a form field, so the label must not claim it.
+    label.removeAttribute('for')
+
+    settingsModelPicker = new ModelPicker(btn, modelPickerDeps())
+    return () => {
+      text.textContent = settings.model
+      btn.title = settings.model
+    }
+  },
 })
 
 document.getElementById('btn-open-settings')?.addEventListener('click', () => openSettings())

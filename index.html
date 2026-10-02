@@ -243,8 +243,11 @@
           <div class="chat-head">
             <div class="chat-head-left">
               <span class="dot" id="chat-dot" title="Connection status"></span>
-              <span class="chat-title">DeepSeek</span>
-              <span class="chat-model" id="chat-model">v4.1-flash</span>
+              <span class="chat-title" id="chat-vendor">DeepSeek</span>
+              <button class="chat-model" id="btn-model" type="button" title="Change model" aria-label="Change model">
+                <span id="chat-model">v4.1-flash</span>
+                <svg class="chat-model-chev" width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><path d="M1 2.5L4 5.5L7 2.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+              </button>
             </div>
             <span class="chat-head-actions">
               <button class="mini-btn" id="btn-new-chat" title="New chat" aria-label="New chat">

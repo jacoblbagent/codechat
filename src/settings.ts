@@ -41,6 +41,12 @@ export interface SettingDef {
   ui?: 'theme' | 'sidebarWidth' | 'chatWidth'
   /** A select that also accepts a free-form value (model ids). */
   allowCustom?: boolean
+  /**
+   * A select whose options come from a live source rather than `options`.
+   * The settings page renders whatever the host mounts for this key (see
+   * `SettingsUiDeps.liveSelect`); without one the row degrades to a text field.
+   */
+  optionsSource?: 'openrouter-models'
   /** Password fields get a Clear button. */
   clearable?: boolean
   /** Long single-line values (a font stack) get a wider field. */
@@ -401,12 +407,10 @@ export const SETTING_GROUPS: SettingGroup[] = [
       s('codechat.apiKey', 'OpenRouter API key',
         'Kept in this browser only — never bundled or committed.',
         'password', '', { placeholder: 'sk-or-v1-…', clearable: true }),
-      sel('codechat.model', 'Model', 'The model the chat panel talks to.',
-        'deepseek/deepseek-v4.1-flash',
-        [['deepseek/deepseek-v4.1-flash', 'deepseek/deepseek-v4.1-flash'],
-          ['deepseek/deepseek-chat', 'deepseek/deepseek-chat'],
-          ['deepseek/deepseek-r1', 'deepseek/deepseek-r1']],
-        { allowCustom: true, placeholder: 'vendor/model-id' }),
+      sel('codechat.model', 'Model',
+        'The model the chat panel talks to. The list is every model OpenRouter currently offers.',
+        'deepseek/deepseek-v4.1-flash', [],
+        { optionsSource: 'openrouter-models', allowCustom: true, placeholder: 'vendor/model-id' }),
       sel('codechat.reasoning', 'Thinking level',
         'How much reasoning the model does before answering. Off sends no reasoning fields at all.',
         'off', [['off', 'Off'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High']]),

@@ -17,6 +17,13 @@ export interface SettingsUiDeps {
   isModified: (def: SettingDef) => boolean
   set: (def: SettingDef, value: unknown) => void
   reset: (def: SettingDef) => void
+  /**
+   * Mount a control for a setting whose options come from a live source (see
+   * `SettingDef.optionsSource`). Returns a function that re-reads the value.
+   * The host owns this because the catalogue is data and the *control* is not
+   * — it is the same model picker the chat panel uses.
+   */
+  liveSelect?: (def: SettingDef, host: HTMLElement, label: HTMLLabelElement) => () => void
 }
 
 const SCOPE_HEAD: Record<string, { title: string; note: string }> = {
@@ -216,6 +223,14 @@ export class SettingsPage {
       label.htmlFor = input.id
       return () => {
         input.value = String(this.deps.get(def))
+        markModified()
+      }
+    }
+
+    if (def.type === 'select' && def.optionsSource && this.deps.liveSelect) {
+      const syncLive = this.deps.liveSelect(def, host, label)
+      return () => {
+        syncLive()
         markModified()
       }
     }

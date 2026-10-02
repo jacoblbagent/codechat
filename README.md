@@ -26,8 +26,9 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   undo stack, so it is one `Ctrl+Z` from being reversed. It is a *change list, not a git
   client* — a static site in a browser tab has no repository to talk to, so nothing here
   stages, commits or pushes.
-- **DeepSeek chat panel** — streaming responses from `deepseek/deepseek-v4.1-flash`,
-  toggled with `Ctrl+Alt+C`, resizable by dragging its edge. The panel can:
+- **Chat panel** — streaming responses from any OpenRouter model (default
+  `deepseek/deepseek-v4.1-flash`), toggled with `Ctrl+Alt+C`, resizable by dragging
+  its edge. The panel can:
   - send the **active file** and your **current selection** as context (per-request toggles),
   - **Insert** any code block it returns at the cursor or over a selection,
   - **Replace file** — write a block straight into the file you have open (the
@@ -44,6 +45,16 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
     sent to OpenRouter as a reasoning effort; the reasoning it produces streams
     into a collapsible panel above the answer. Left at **Off**, no reasoning
     fields are sent at all,
+  - **choose the model** from the live OpenRouter catalogue. Click the model
+    badge in the panel header (or the *Model* row in Settings) and you get a
+    searchable list of every model OpenRouter currently offers — 465 of them at
+    the time of writing — with each one's context window and price per million
+    tokens, a **Free** filter, your recently used models, and the model in force
+    pinned to the top so the list always shows what is selected. The catalogue
+    comes from `GET https://openrouter.ai/api/v1/models` (public — it needs no
+    key), is cached for a day, and falls back to a short built-in list with a
+    **Retry** if the network is down. An id OpenRouter adds after your cache was
+    written can still be typed in directly,
   - run slash commands: `/explain`, `/fix`, `/tests`, `/refactor`, `/docs`.
 - **Syntax diagnostics** in the status bar for open files (semantic analysis is off — a
   browser tab has no `node_modules`).
@@ -108,11 +119,15 @@ Pages on every push to `main`.
 index.html          full IDE shell (title bar → status bar)
 src/main.ts         app wiring: tabs, tree, commands, settings, layout
 src/chat.ts         chat panel: streaming, markdown rendering, code actions
-src/deepseek.ts     OpenRouter client (SSE) + model catalogue
+src/deepseek.ts     OpenRouter client (SSE) + the request shape
+src/models.ts       the OpenRouter catalogue: fetch, cache, search, formatting
+src/model-picker.ts the searchable model picker (chat header + Settings)
+src/settings.ts     settings catalogue (VS Code core + CodeChat)
+src/settings-ui.ts  settings page renderer
 src/workspace.ts    in-memory + File System Access workspace, search, tree
-src/monaco.ts       editor factory, workers, Dark+ theme, file icons
+src/monaco.ts       editor factory, workers, One Dark themes, file icons
 src/markdown.ts     dependency-free markdown renderer
-src/styles.css      VS Code Dark+ inspired styling
+src/styles.css      One Dark Pro inspired styling
 ```
 
 ## Notes & limitations
@@ -124,6 +139,10 @@ src/styles.css      VS Code Dark+ inspired styling
   and file-picker fallbacks.
 - No terminal and no extension host. Syntax highlighting covers ~30 languages; only
   JSON/CSS/HTML/TS/JS get language-service features (completion, hover, syntax errors).
+- The model list is a **snapshot**: it is fetched once and cached for a day, so a model
+  released in the last few hours may be missing. Type its id in the picker and it will be
+  used anyway. Prices and context windows come from OpenRouter and are shown, not enforced
+  — nothing here checks that the model you pick supports the thinking level you set.
 
 ## License
 

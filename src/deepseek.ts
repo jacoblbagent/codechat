@@ -145,20 +145,6 @@ export async function streamChat(messages: ChatMessage[], opts: StreamOptions): 
   if (buffer) handleLine(buffer)
 }
 
-/* ── Model catalogue ───────────────────────────────────────── */
-export interface ModelOption {
-  id: string
-  label: string
-}
-
-export const MODELS: ModelOption[] = [
-  { id: 'deepseek/deepseek-v4.1-flash', label: 'deepseek/deepseek-v4.1-flash' },
-  { id: 'deepseek/deepseek-chat', label: 'deepseek/deepseek-chat' },
-  { id: 'deepseek/deepseek-r1', label: 'deepseek/deepseek-r1' },
-]
-
-/** Short badge text for the panel header, e.g. "v4.1-flash". */
-export function shortModelName(id: string): string {
-  const tail = id.split('/').pop() ?? id
-  return tail.replace(/^deepseek-/, '')
-}
+/* The model catalogue lives in `models.ts` — it is fetched from OpenRouter
+   rather than hard-coded here. `DEFAULT_MODEL` stays put: it is the id the
+   request falls back to when the user has not chosen one. */
