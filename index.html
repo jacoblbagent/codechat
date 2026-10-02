@@ -188,9 +188,24 @@
               </span>
             </div>
             <div class="pane-pad scm-pane">
+              <!-- The commit box sits outside #scm-list on purpose: the list is
+                   rebuilt on every keystroke in the editor, and a rebuilt
+                   textarea would lose focus and the half-typed message. -->
+              <div class="scm-commit">
+                <textarea class="scm-message" id="scm-message" rows="2" spellcheck="false"
+                  placeholder="Message (Ctrl+Enter to commit)" aria-label="Commit message"></textarea>
+                <div class="scm-commit-row">
+                  <button class="btn btn-primary" id="btn-scm-commit" disabled>Commit</button>
+                  <span class="scm-commit-note" id="scm-commit-note"></span>
+                </div>
+                <p class="scm-commit-legal">
+                  Commits are recorded in this browser. No <code>.git</code> directory is
+                  written and nothing is pushed.
+                </p>
+              </div>
               <div class="scm-empty is-hidden" id="scm-empty">
                 <p>No changes</p>
-                <p class="muted">A file you edit shows up here until you save or discard it.</p>
+                <p class="muted">A file you edit shows up here until you commit, save or discard it.</p>
               </div>
               <div class="scm-list" id="scm-list"></div>
             </div>

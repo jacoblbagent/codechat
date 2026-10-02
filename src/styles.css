@@ -316,8 +316,63 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .scm-mark { flex: none; width: 12px; text-align: center; font: 600 11px var(--mono); color: var(--yellow); }
 .scm-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scm-dir { color: var(--fg-dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.scm-actions { margin-left: auto; display: flex; gap: 2px; flex: none; opacity: 0; }
+.scm-actions { margin-left: 6px; display: flex; gap: 2px; flex: none; opacity: 0; }
 .scm-file:hover .scm-actions, .scm-file:focus-within .scm-actions { opacity: 1; }
+/* The stat pushes the row's tail right; the action buttons reserve their space
+   (opacity, not display) so hovering a row moves nothing. */
+.scm-stat { display: flex; gap: 5px; flex: none; margin-left: auto; font: 11px var(--mono); }
+.scm-stat b { color: var(--green); font-weight: 400; }
+.scm-stat i { color: var(--red); font-style: normal; }
+
+/* ── Source Control: staging, commits, history ─────────────── */
+.scm-commit { display: flex; flex-direction: column; gap: 6px; padding: 2px 2px 8px; }
+.scm-message {
+  width: 100%; min-height: 46px; max-height: 140px; resize: vertical;
+  padding: 5px 7px; border-radius: 3px;
+  background: var(--bg-input); color: var(--fg);
+  border: 1px solid var(--border-strong); font: 12px var(--ui);
+}
+.scm-message:focus { border-color: var(--blue); outline: none; }
+.scm-commit-row { display: flex; align-items: center; gap: 8px; }
+.scm-commit-row .btn { flex: none; }
+.scm-commit-note { min-width: 0; font-size: 11px; color: var(--fg-dim); }
+.scm-commit-legal { margin: 0; font-size: 10.5px; line-height: 1.45; color: var(--fg-dim); }
+.scm-commit-legal code {
+  padding: 0 3px; border-radius: 2px;
+  background: var(--bg-code-inline); font-family: var(--mono);
+}
+
+.scm-section {
+  display: flex; align-items: center; gap: 6px; padding: 9px 2px 3px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--fg-dim);
+}
+.scm-section-count {
+  padding: 0 5px; border-radius: 8px; background: var(--bg-btn);
+  font-size: 10px; font-weight: 600; letter-spacing: 0; color: var(--fg);
+}
+.scm-section-action { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+.scm-commit-entry { display: flex; flex-direction: column; }
+.scm-commit-head {
+  display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
+  padding: 3px 4px; border-radius: 3px; cursor: pointer;
+  background: none; color: var(--fg); font-size: 12px;
+}
+.scm-commit-head:hover { background: var(--hover-overlay); }
+.scm-commit-head:focus-visible { outline: 1px solid var(--blue); outline-offset: -1px; }
+.scm-commit-chev { flex: none; color: var(--fg-dim); transition: transform 0.12s ease; }
+.scm-commit-entry.is-open .scm-commit-chev { transform: rotate(90deg); }
+.scm-commit-id { flex: none; font: 11px var(--mono); color: var(--blue); }
+.scm-commit-msg { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scm-commit-meta { flex: none; font-size: 10.5px; color: var(--fg-dim); }
+.scm-commit-files { display: flex; flex-direction: column; gap: 1px; padding: 2px 0 5px 16px; }
+.scm-commit-file { display: flex; align-items: center; gap: 6px; padding: 1px 2px; }
+.scm-commit-path {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font: 11px var(--mono); color: var(--fg-dim);
+}
+.scm-commit-file .mini-btn { flex: none; }
 .row {
   display: flex; align-items: center; gap: 6px;
   height: var(--row); padding: 0 8px 0 6px;

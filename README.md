@@ -27,12 +27,26 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   Access API (Chrome/Edge) and `Ctrl+S` writes changes back to disk. Browsers without the
   picker fall back to `<input type="file">` / drag-and-drop, and an in-memory demo
   workspace ships by default.
-- **Source Control** — the rail icon (VS Code's own codicon) opens a change list: every
-  file whose buffer has moved away from what was last read or written, with a count on
-  the icon, per-file **Save** / **Discard** and a **Save all**. Discard goes through the
-  undo stack, so it is one `Ctrl+Z` from being reversed. It is a *change list, not a git
-  client* — a static site in a browser tab has no repository to talk to, so nothing here
-  stages, commits or pushes.
+- **Source Control** — the rail icon (VS Code's own codicon) opens the change list, with
+  the count on the icon: every file whose buffer has moved away from what was last saved
+  or committed, each with a `+12 −3` line stat, per-file **Stage** / **Save** / **Discard**
+  and a **Save all**.
+  - **Staging** — stage a file or **Stage all**; staged changes sit in their own section
+    above the rest and are the only thing the next commit takes. **Unstage all** puts them
+    back.
+  - **Committing** — write a message and press **Commit** (or `Ctrl+Enter`); it stays
+    disabled until something is staged *and* there is a message. Committing writes the
+    staged files out (so what is recorded is what is on disk) and clears them from the
+    list. Files you did not stage stay changed.
+  - **History** — every commit with its revision id, message, file count and age. Expand
+    one to see the files it captured and **Restore** any of them, as an undoable edit.
+  - **Discard** goes through the undo stack, so a mistaken click is one `Ctrl+Z` away, and
+    it reverts to the last commit rather than to some earlier state.
+  - It is **not git**. A static site in a browser tab has no repository to talk to, and
+    writing real git objects needs an index, packfiles and refs. What you get is the
+    workflow a browser can honour — staging, commits with a snapshot, history and restore —
+    recorded in `localStorage` per workspace. No `.git` directory is written, nothing is
+    pushed, and there are no branches or diffs.
 - **Chat panel** — streaming responses from any OpenRouter model (default
   `deepseek/deepseek-v4.1-flash`), toggled with `Ctrl+Alt+C`, resizable by dragging
   its edge.
@@ -137,6 +151,8 @@ src/main.ts         app wiring: tabs, tree, commands, settings, layout
 src/chat.ts         chat panel: sessions, streaming, markdown rendering, code actions
 src/deepseek.ts     OpenRouter client (SSE) + the request shape
 src/credits.ts      OpenRouter balance: /api/v1/key + /api/v1/credits, cached
+src/scm.ts          staging area, commit records and their storage
+src/diff.ts         line-diff counts for the +12 −3 gutter
 src/credits-ui.ts   the read-only Credits row in Settings
 src/models.ts       the OpenRouter catalogue: fetch, cache, search, formatting
 src/model-picker.ts the searchable model picker (chat header + Settings)
@@ -157,6 +173,11 @@ src/styles.css      One Dark Pro inspired styling
   and file-picker fallbacks.
 - No terminal and no extension host. Syntax highlighting covers ~30 languages; only
   JSON/CSS/HTML/TS/JS get language-service features (completion, hover, syntax errors).
+- **Commits are this app's own records, not git.** They live in `localStorage` under
+  `codechat.scm.v1`, keyed by workspace name (the 3 most recent workspaces, 30 commits
+  each, with the file snapshots they captured). Clearing site data clears them, and they
+  never leave the browser. A commit holds full file contents rather than diffs, which is
+  what makes Restore a one-liner; if storage runs out the oldest commits are dropped first.
 - **The Credits row shows what the key is allowed to see.** `GET /api/v1/key` works with any
   key and reports that key's own limit, remaining and usage. The *account* balance comes from
   `GET /api/v1/credits`, which OpenRouter restricts to provisioning keys — with an ordinary

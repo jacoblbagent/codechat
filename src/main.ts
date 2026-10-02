@@ -14,7 +14,9 @@ import {
   uriFor,
 } from './monaco'
 import { CreditsRow } from './credits-ui'
+import { diffStat, type DiffStat } from './diff'
 import { ModelPicker } from './model-picker'
+import { fmtAgo, Repo, type Commit, type CommitFile } from './scm'
 import { buildMonacoOptions, defaultCore, settingById, type SettingDef } from './settings'
 import { SettingsPage } from './settings-ui'
 import { Workspace, type SearchHit, type WsFile } from './workspace'
@@ -192,6 +194,9 @@ const els = {
   sbBranchName: $('sb-branch-name'),
   scmList: $('scm-list'),
   scmEmpty: $('scm-empty'),
+  scmMessage: $<HTMLTextAreaElement>('scm-message'),
+  scmCommit: $<HTMLButtonElement>('btn-scm-commit'),
+  scmCommitNote: $('scm-commit-note'),
   thinkSelect: $<HTMLSelectElement>('think-select'),
   btnSettings: $('btn-open-settings'),
   chatDot: $('chat-dot'),
@@ -340,13 +345,19 @@ function modelFor(path: string, content: string): monaco.editor.ITextModel {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   Source Control
+   Source Control — changes, staging, commits, history
    ══════════════════════════════════════════════════════════════
 
-   A static browser IDE has no repository to talk to, so this deliberately does
-   not pretend to be git. What it can honestly know is which files have moved
-   away from what was last read or written — VS Code's "Changes" list without
-   the commit. Nothing here stages, commits or pushes. */
+   A static browser IDE has no repository to talk to, so this does not pretend to
+   be git — `src/scm.ts` says exactly what a commit is here and what it is not.
+   What the panel can honour is the workflow around it: which files have moved
+   away from their last saved or committed content, which of those are staged for
+   the next commit, the commit itself, and the history of what was committed. */
+
+const repo = new Repo()
+/** Commit ids whose file list is open. Kept outside the DOM: the list is
+ *  rebuilt on every keystroke in the editor. */
+const expandedCommits = new Set<string>()
 
 function scmChangedFiles(): WsFile[] {
   const out: WsFile[] = []
@@ -356,69 +367,265 @@ function scmChangedFiles(): WsFile[] {
   return out.sort((a, b) => a.path.localeCompare(b.path))
 }
 
+interface ScmChange {
+  file: WsFile
+  /** How much the file moved, for VS Code's +12 −3 gutter. */
+  stat: DiffStat
+}
+
+function scmChanges(): ScmChange[] {
+  return scmChangedFiles().map((file) => ({ file, stat: diffStat(file.original, file.content) }))
+}
+
+/** Keep the repo pointed at the open workspace, and forget staging that went stale. */
+function syncRepo(changed: WsFile[]): void {
+  if (repo.root !== workspace.rootName) repo.reset(workspace.rootName)
+  repo.pruneStaged(changed.map((f) => f.path))
+}
+
+/**
+ * Write new content into a file's buffer. Goes through `executeEdits` when the
+ * model is open so the change joins the undo stack, the same way discard does.
+ */
+function scmWriteBuffer(path: string, content: string, label: string): void {
+  const model = models.get(path)
+  if (model && !model.isDisposed()) {
+    editor.pushUndoStop()
+    editor.executeEdits(label, [{ range: model.getFullModelRange(), text: content }])
+    editor.pushUndoStop()
+  }
+  const file = workspace.get(path)
+  if (file) file.content = content
+}
+
+/* ── rows ─────────────────────────────────────────────────── */
+
+function scmSection(title: string, count: number): HTMLElement {
+  const head = document.createElement('div')
+  head.className = 'scm-section'
+  const label = document.createElement('span')
+  label.className = 'scm-section-title'
+  label.textContent = title
+  const badge = document.createElement('span')
+  badge.className = 'scm-section-count'
+  badge.textContent = String(count)
+  head.append(label, badge)
+  return head
+}
+
+function scmSectionAction(parent: HTMLElement, label: string, title: string, act: string): void {
+  const btn = document.createElement('button')
+  btn.type = 'button'
+  btn.className = 'mini-btn scm-section-action'
+  btn.dataset.scmBulk = act
+  btn.title = title
+  btn.setAttribute('aria-label', title)
+  btn.textContent = label
+  parent.appendChild(btn)
+}
+
+function scmRow(change: ScmChange, staged: boolean): HTMLElement {
+  const { file, stat } = change
+  const row = document.createElement('div')
+  row.className = 'scm-file'
+  row.dataset.path = file.path
+  row.title = file.path
+
+  const mark = document.createElement('span')
+  mark.className = 'scm-mark'
+  mark.textContent = 'M'
+  mark.title = 'Modified'
+
+  const icon = document.createElement('span')
+  icon.className = 'row-icon'
+  icon.innerHTML = fileIcon(file.name)
+
+  const name = document.createElement('span')
+  name.className = 'scm-name'
+  name.textContent = file.name
+
+  const dir = document.createElement('span')
+  dir.className = 'scm-dir'
+  const cut = file.path.lastIndexOf('/')
+  dir.textContent = cut > 0 ? file.path.slice(0, cut + 1) : ''
+
+  const statEl = document.createElement('span')
+  statEl.className = 'scm-stat'
+  statEl.title = `${stat.added} line${stat.added === 1 ? '' : 's'} added, ${stat.removed} removed`
+  if (stat.added) {
+    const add = document.createElement('b')
+    add.textContent = `+${stat.added}`
+    statEl.appendChild(add)
+  }
+  if (stat.removed) {
+    const del = document.createElement('i')
+    del.textContent = `\u2212${stat.removed}`
+    statEl.appendChild(del)
+  }
+
+  const actions = document.createElement('span')
+  actions.className = 'scm-actions'
+  const buttons: Array<[string, string, string]> = [
+    staged
+      ? ['unstage', '\u2212', `Unstage ${file.name}`]
+      : ['stage', '+', `Stage ${file.name} for the next commit`],
+    ['save', '\u2713', `Save ${file.name}`],
+    ['discard', '\u21ba', `Discard changes in ${file.name}`],
+  ]
+  for (const [act, glyph, title] of buttons) {
+    const btn = document.createElement('button')
+    btn.className = 'mini-btn'
+    btn.dataset.scm = act
+    btn.title = title
+    btn.setAttribute('aria-label', title)
+    btn.textContent = glyph
+    actions.appendChild(btn)
+  }
+
+  row.append(mark, icon, name, dir, statEl, actions)
+  return row
+}
+
+function scmCommitRow(commit: Commit): HTMLElement {
+  const open = expandedCommits.has(commit.id)
+  const row = document.createElement('div')
+  row.className = open ? 'scm-commit-entry is-open' : 'scm-commit-entry'
+  row.dataset.commit = commit.id
+
+  const head = document.createElement('button')
+  head.type = 'button'
+  head.className = 'scm-commit-head'
+  head.dataset.commitToggle = commit.id
+  head.setAttribute('aria-expanded', String(open))
+
+  const chevron = document.createElement('span')
+  chevron.className = 'scm-commit-chev'
+  chevron.setAttribute('aria-hidden', 'true')
+  chevron.innerHTML =
+    '<svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>'
+
+  const id = document.createElement('span')
+  id.className = 'scm-commit-id'
+  id.textContent = commit.id
+  id.title = `Revision ${commit.id}`
+
+  const msg = document.createElement('span')
+  msg.className = 'scm-commit-msg'
+  msg.textContent = commit.message
+  msg.title = commit.message
+
+  const meta = document.createElement('span')
+  meta.className = 'scm-commit-meta'
+  meta.textContent = `${commit.files.length} file${commit.files.length === 1 ? '' : 's'} · ${fmtAgo(commit.at)}`
+
+  head.append(chevron, id, msg, meta)
+  row.appendChild(head)
+
+  if (open) {
+    const files = document.createElement('div')
+    files.className = 'scm-commit-files'
+    for (const captured of commit.files) {
+      const line = document.createElement('div')
+      line.className = 'scm-commit-file'
+      line.dataset.commitFile = captured.path
+
+      const path = document.createElement('span')
+      path.className = 'scm-commit-path'
+      path.textContent = captured.path
+      path.title = captured.path
+
+      const restore = document.createElement('button')
+      restore.type = 'button'
+      restore.className = 'mini-btn'
+      restore.dataset.restore = captured.path
+      restore.dataset.commitId = commit.id
+      restore.textContent = 'Restore'
+      restore.title = `Put ${captured.path} back to what ${commit.id} recorded`
+      restore.setAttribute('aria-label', restore.title)
+
+      line.append(path, restore)
+      files.appendChild(line)
+    }
+    row.appendChild(files)
+  }
+
+  return row
+}
+
+/* ── render ───────────────────────────────────────────────── */
+
 function renderScm(): void {
-  const files = scmChangedFiles()
+  // One pass: the diff stat is computed once per change and reused for the row.
+  const changes = scmChanges()
+  syncRepo(changes.map((c) => c.file))
+
   const list = els.scmList
   const empty = els.scmEmpty
   if (!list || !empty) return
 
-  empty.classList.toggle('is-hidden', files.length > 0)
+  const staged = changes.filter((c) => repo.isStaged(c.file.path))
+  const unstaged = changes.filter((c) => !repo.isStaged(c.file.path))
+
+  empty.classList.toggle('is-hidden', changes.length > 0 || repo.commits.length > 0)
   list.replaceChildren()
 
-  for (const file of files) {
-    const row = document.createElement('div')
-    row.className = 'scm-file'
-    row.dataset.path = file.path
-    row.title = file.path
-
-    const mark = document.createElement('span')
-    mark.className = 'scm-mark'
-    mark.textContent = 'M'
-    mark.title = 'Modified'
-
-    const icon = document.createElement('span')
-    icon.className = 'row-icon'
-    icon.innerHTML = fileIcon(file.name)
-
-    const name = document.createElement('span')
-    name.className = 'scm-name'
-    name.textContent = file.name
-
-    const dir = document.createElement('span')
-    dir.className = 'scm-dir'
-    const cut = file.path.lastIndexOf('/')
-    dir.textContent = cut > 0 ? file.path.slice(0, cut + 1) : ''
-
-    const actions = document.createElement('span')
-    actions.className = 'scm-actions'
-    const buttons: Array<[string, string, string]> = [
-      ['save', '\u2713', `Save ${file.name}`],
-      ['discard', '\u21ba', `Discard changes in ${file.name}`],
-    ]
-    for (const [act, glyph, title] of buttons) {
-      const btn = document.createElement('button')
-      btn.className = 'mini-btn'
-      btn.dataset.scm = act
-      btn.title = title
-      btn.setAttribute('aria-label', title)
-      btn.textContent = glyph
-      actions.appendChild(btn)
-    }
-
-    row.append(mark, icon, name, dir, actions)
-    list.appendChild(row)
+  if (staged.length) {
+    const section = scmSection('Staged Changes', staged.length)
+    scmSectionAction(section, 'Unstage all', 'Unstage every change', 'unstage-all')
+    list.appendChild(section)
+    for (const change of staged) list.appendChild(scmRow(change, true))
   }
 
+  if (unstaged.length) {
+    const section = scmSection('Changes', unstaged.length)
+    scmSectionAction(section, 'Stage all', 'Stage every change for the next commit', 'stage-all')
+    list.appendChild(section)
+    for (const change of unstaged) list.appendChild(scmRow(change, false))
+  }
+
+  if (repo.commits.length) {
+    const section = scmSection('History', repo.commits.length)
+    list.appendChild(section)
+    for (const commit of repo.commits) list.appendChild(scmCommitRow(commit))
+  }
+
+  syncScmBadge(changes.length)
+  syncCommitBox(staged.length, changes.length)
+}
+
+function syncScmBadge(count: number): void {
   // VS Code shows the count on the activity-bar icon.
   const btn = document.getElementById('btn-view-scm')
-  if (btn) {
-    btn.classList.toggle('has-badge', files.length > 0)
-    btn.dataset.badge = String(files.length)
-    btn.title = files.length
-      ? `Source Control \u2014 ${files.length} change${files.length === 1 ? '' : 's'}`
-      : 'Source Control'
+  if (!btn) return
+  btn.classList.toggle('has-badge', count > 0)
+  btn.dataset.badge = String(count)
+  btn.title = count
+    ? `Source Control \u2014 ${count} change${count === 1 ? '' : 's'}`
+    : 'Source Control'
+}
+
+/** The commit button follows the staging area and the message box. */
+function syncCommitBox(staged: number, changed: number): void {
+  const btn = els.scmCommit
+  const note = els.scmCommitNote
+  if (!btn) return
+  const hasMessage = (els.scmMessage?.value ?? '').trim().length > 0
+  btn.disabled = staged === 0 || !hasMessage
+  btn.title = staged === 0
+    ? 'Stage a change first'
+    : hasMessage
+      ? `Commit ${staged} staged file${staged === 1 ? '' : 's'}`
+      : 'A commit needs a message'
+  if (note) {
+    note.textContent = staged
+      ? `${staged} of ${changed} change${changed === 1 ? '' : 's'} staged`
+      : changed
+        ? 'Nothing staged yet'
+        : 'Nothing to commit'
   }
 }
+
+/* ── actions ──────────────────────────────────────────────── */
 
 async function saveScmFile(path: string): Promise<void> {
   try {
@@ -436,14 +643,7 @@ async function saveScmFile(path: string): Promise<void> {
 function discardScmFile(path: string): void {
   const file = workspace.get(path)
   if (!file) return
-  const model = models.get(path)
-  if (model) {
-    editor.pushUndoStop()
-    editor.executeEdits('scm-discard', [{ range: model.getFullModelRange(), text: file.original }])
-    editor.pushUndoStop()
-  } else {
-    file.content = file.original
-  }
+  scmWriteBuffer(path, file.original, 'scm-discard')
   renderTabs()
   renderTree()
   renderScm()
@@ -451,16 +651,126 @@ function discardScmFile(path: string): void {
   toast(`Discarded changes in ${path}`, 'ok')
 }
 
+/**
+ * Commit the staged files. Each is written out first (so what is recorded is
+ * what is on disk, and the file leaves the change list), then the repository
+ * records the snapshot. A file that cannot be written is left out and reported
+ * rather than silently committed as something it is not.
+ */
+async function commitScm(): Promise<void> {
+  const message = els.scmMessage?.value ?? ''
+  const staged = scmChangedFiles().filter((f) => repo.isStaged(f.path))
+
+  if (!staged.length) {
+    toast('Stage a change before committing', 'err')
+    return
+  }
+  if (!message.trim()) {
+    toast('A commit needs a message', 'err')
+    els.scmMessage?.focus()
+    return
+  }
+
+  const applied: CommitFile[] = []
+  const failed: string[] = []
+  for (const file of staged) {
+    try {
+      await savePath(file.path)
+      const saved = workspace.get(file.path)
+      if (saved) applied.push({ path: file.path, content: saved.content })
+    } catch {
+      failed.push(file.path)
+    }
+  }
+
+  const commit = repo.commit(message, applied)
+  if (!commit) {
+    toast('Nothing to commit', 'err')
+    return
+  }
+
+  if (els.scmMessage) els.scmMessage.value = ''
+  renderTabs()
+  renderTree()
+  renderScm()
+  if (chat) chat.refreshContextViz()
+  toast(`Committed ${commit.id} \u2014 ${applied.length} file${applied.length === 1 ? '' : 's'}`, 'ok')
+  if (failed.length) toast(`Could not commit ${failed.join(', ')}`, 'err')
+}
+
+/** Put a file back to what a commit recorded, as an undoable edit. */
+function restoreFromCommit(commitId: string, path: string): void {
+  const commit = repo.find(commitId)
+  const content = commit ? repo.contentIn(commit, path) : undefined
+  if (content === undefined) return
+  scmWriteBuffer(path, content, 'scm-restore')
+  if (!openTabs.includes(path)) openFile(path)
+  renderTabs()
+  renderTree()
+  renderScm()
+  if (chat) chat.refreshContextViz()
+  toast(`Restored ${path} from ${commitId}`, 'ok')
+}
+
 els.scmList?.addEventListener('click', (e) => {
   const target = e.target as HTMLElement
+
+  const bulk = target.closest<HTMLElement>('[data-scm-bulk]')?.dataset.scmBulk
+  if (bulk) {
+    const changed = scmChangedFiles().map((f) => f.path)
+    if (bulk === 'stage-all') repo.stage(changed)
+    else repo.unstage(changed)
+    renderScm()
+    return
+  }
+
+  const toggle = target.closest<HTMLElement>('[data-commit-toggle]')?.dataset.commitToggle
+  if (toggle) {
+    if (expandedCommits.has(toggle)) expandedCommits.delete(toggle)
+    else expandedCommits.add(toggle)
+    renderScm()
+    return
+  }
+
+  const restore = target.closest<HTMLElement>('[data-restore]')
+  if (restore?.dataset.restore && restore.dataset.commitId) {
+    e.stopPropagation()
+    restoreFromCommit(restore.dataset.commitId, restore.dataset.restore)
+    return
+  }
+
   const row = target.closest<HTMLElement>('.scm-file')
   if (!row) return
   const path = row.dataset.path!
   const act = target.closest<HTMLElement>('[data-scm]')?.dataset.scm
-  if (act === 'save') void saveScmFile(path)
-  else if (act === 'discard') discardScmFile(path)
-  else openFile(path)
+  if (act === 'stage') {
+    repo.stage([path])
+    renderScm()
+  } else if (act === 'unstage') {
+    repo.unstage([path])
+    renderScm()
+  } else if (act === 'save') {
+    void saveScmFile(path)
+  } else if (act === 'discard') {
+    discardScmFile(path)
+  } else {
+    openFile(path)
+  }
 })
+
+els.scmMessage?.addEventListener('input', () => syncCommitBox(repoStagedCount(), scmChangedFiles().length))
+els.scmMessage?.addEventListener('keydown', (e) => {
+  // Ctrl/Cmd+Enter commits, the way VS Code does from the message box.
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault()
+    void commitScm()
+  }
+})
+els.scmCommit?.addEventListener('click', () => void commitScm())
+
+function repoStagedCount(): number {
+  return scmChangedFiles().filter((f) => repo.isStaged(f.path)).length
+}
 
 document.getElementById('btn-scm-save-all')?.addEventListener('click', () => {
   const files = scmChangedFiles()
