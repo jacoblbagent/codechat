@@ -309,7 +309,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .field:focus { border-color: var(--blue); outline: none; }
 .field::placeholder { color: var(--fg-placeholder); }
 .label { font-size: 12px; color: var(--fg); margin-top: 4px; }
-.slider { width: 100%; accent-color: var(--blue-btn); }
 .hint { font-size: 11px; color: var(--fg-dim); line-height: 1.5; }
 .btn {
   height: 26px; padding: 0 12px; border-radius: 2px;

@@ -57,6 +57,8 @@ function describe(status: number, body: string): string {
 
 /** Stream a completion, invoking onDelta for each text fragment. */
 export async function streamChat(messages: ChatMessage[], opts: StreamOptions): Promise<void> {
+  // 0.2 is the app's fixed sampling temperature: the Settings view deliberately
+  // exposes no control for it, so this default is the single source of truth.
   const { apiKey, model = DEFAULT_MODEL, temperature = 0.2, signal, onDelta, onReasoning } = opts
 
   if (!apiKey) {

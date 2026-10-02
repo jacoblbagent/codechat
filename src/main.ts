@@ -22,7 +22,6 @@ import { Workspace, type SearchHit } from './workspace'
 interface Settings {
   apiKey: string
   model: string
-  temperature: number
 }
 
 interface UiState {
@@ -38,7 +37,7 @@ const UI_KEY = 'codechat.ui.v1'
 const ENV_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY as string | undefined) ?? ''
 
 function loadSettings(): Settings {
-  const fallback: Settings = { apiKey: ENV_KEY, model: DEFAULT_MODEL, temperature: 0.2 }
+  const fallback: Settings = { apiKey: ENV_KEY, model: DEFAULT_MODEL }
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (!raw) return fallback
@@ -124,8 +123,6 @@ const els = {
   setKey: $<HTMLInputElement>('set-key'),
   setModel: $<HTMLSelectElement>('set-model'),
   setModelCustom: $<HTMLInputElement>('set-model-custom'),
-  setTemp: $<HTMLInputElement>('set-temp'),
-  tempVal: $('temp-val'),
   chatDot: $('chat-dot'),
 }
 
@@ -1086,15 +1083,10 @@ function syncSettingsForm(): void {
   els.setModel.value = MODELS.some((m) => m.id === settings.model) ? settings.model : '__custom__'
   els.setModelCustom.value = els.setModel.value === '__custom__' ? settings.model : ''
   els.setModelCustom.classList.toggle('is-hidden', els.setModel.value !== '__custom__')
-  els.setTemp.value = String(settings.temperature)
-  els.tempVal.textContent = settings.temperature.toFixed(2)
 }
 
 els.setModel.addEventListener('change', () => {
   els.setModelCustom.classList.toggle('is-hidden', els.setModel.value !== '__custom__')
-})
-els.setTemp.addEventListener('input', () => {
-  els.tempVal.textContent = Number(els.setTemp.value).toFixed(2)
 })
 /** Read the settings form into `settings` and write it to localStorage. */
 function persistSettings(announce: boolean): void {
@@ -1102,7 +1094,6 @@ function persistSettings(announce: boolean): void {
   settings = {
     apiKey: els.setKey.value.trim(),
     model: model || DEFAULT_MODEL,
-    temperature: Number(els.setTemp.value),
   }
   saveSettings(settings)
   chat.refreshModelBadge()

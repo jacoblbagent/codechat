@@ -15,7 +15,6 @@ export interface ChatContext {
 export interface ChatConfig {
   apiKey: string
   model: string
-  temperature: number
 }
 
 export interface ChatDeps {
@@ -339,7 +338,6 @@ export class ChatPanel {
       await streamChat(history, {
         apiKey,
         model: this.deps.getConfig().model,
-        temperature: this.deps.getConfig().temperature,
         signal: this.controller.signal,
         onDelta: (chunk) => {
           buffer += chunk
