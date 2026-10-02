@@ -2,9 +2,101 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>CodeChat — Browser IDE</title>
     <meta name="description" content="A VS Code-style browser IDE built on Monaco with a toggleable right-side DeepSeek chat panel." />
+
+    <!-- Resolve the theme before the first paint so the shell never
+         flashes the wrong palette. Mirrors the key used in src/main.ts. -->
+    <script>
+      (function () {
+        var theme = 'dark'
+        try {
+          var raw = localStorage.getItem('codechat.ui.v1')
+          var saved = raw && JSON.parse(raw).theme
+          if (saved === 'dark' || saved === 'light') theme = saved
+          else if (window.matchMedia('(prefers-color-scheme: light)').matches) theme = 'light'
+        } catch (e) {
+          /* private mode / bad JSON — fall back to dark */
+        }
+        document.documentElement.dataset.theme = theme
+      })()
+    </script>
+
+    <!-- Critical inline shell styles --------------------------------------
+         Painted before the external stylesheet finishes downloading, so the
+         very first frame is already dark and correctly laid out. Without this
+         the browser paints a white canvas with the shell stacked vertically,
+         then snaps to the dark IDE (FOUC).
+         These rules mirror the base tokens + skeleton in src/styles.css and
+         must be kept in sync with it. -->
+    <style>
+      :root,
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --bg: #282c34; --bg-side: #21252b; --bg-activity: #21252b;
+        --bg-title: #21252b; --bg-status: #21252b; --sb-fg: #9da5b4;
+        --fg: #abb2bf; --fg-dim: #5c6370; --border: #181a1f;
+        --sidebar-w: 240px; --chat-w: 400px;
+        --ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Ubuntu', 'Droid Sans', sans-serif;
+      }
+      [data-theme='light'] {
+        color-scheme: light;
+        --bg: #fafafa; --bg-side: #eaeaeb; --bg-activity: #eaeaeb;
+        --bg-title: #eaeaeb; --bg-status: #eaeaeb; --sb-fg: #383a42;
+        --fg: #383a42; --fg-dim: #a0a1a7; --border: #d4d4d5;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        height: 100%; margin: 0;
+        background: var(--bg); color: var(--fg);
+        font: 13px/1.4 var(--ui);
+        overflow: hidden;
+        -webkit-font-smoothing: antialiased;
+      }
+      button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+      .is-hidden { display: none !important; }
+      /* Only the icon for the *other* theme is shown on the toggle. */
+      .tb-btn svg { display: block; }
+      .tb-btn .icon-moon { display: none; }
+      [data-theme='light'] .tb-btn .icon-sun { display: none; }
+      [data-theme='light'] .tb-btn .icon-moon { display: block; }
+      .muted { color: var(--fg-dim); }
+      #app { height: 100vh; display: grid; grid-template-rows: 35px 1fr 22px; }
+      .body {
+        display: grid;
+        grid-template-columns: 48px var(--sidebar-w) 1fr 4px minmax(0, var(--chat-w));
+        min-height: 0; overflow: hidden;
+      }
+      .body.chat-collapsed { grid-template-columns: 48px var(--sidebar-w) 1fr 0 0; }
+      .body.chat-collapsed .chat, .body.chat-collapsed .chat-resizer { display: none; }
+      .titlebar { background: var(--bg-title); border-bottom: 1px solid var(--border); }
+      .activitybar { background: var(--bg-activity); }
+      .sidebar { background: var(--bg-side); border-right: 1px solid var(--border); min-width: 0; overflow: hidden; }
+      .editor-area { background: var(--bg); min-width: 0; overflow: hidden; }
+      .tabs { height: 35px; background: var(--bg-side); flex: none; }
+      .chat-resizer { background: var(--border); }
+      .chat { background: var(--bg-side); border-left: 1px solid var(--border); min-width: 0; overflow: hidden; }
+      .statusbar { background: var(--bg-status); color: var(--sb-fg); }
+      @media (max-width: 900px) {
+        /* Only the activity bar and editor are laid out inline; both side
+           panels become off-canvas drawers so they never eat the screen. */
+        #app { height: 100dvh; }
+        .body { grid-template-columns: 48px 1fr; position: relative; }
+        .body.chat-collapsed { grid-template-columns: 48px 1fr; }
+        .sidebar, .chat {
+          position: absolute; top: 0; bottom: 0; z-index: 50;
+          visibility: hidden;
+        }
+        .sidebar { left: 48px; width: min(74vw, 290px); transform: translateX(calc(-100% - 48px)); }
+        .chat { right: 0; width: min(80vw, 330px); transform: translateX(102%); }
+        .body.sidebar-open .sidebar, .body.chat-open .chat { transform: none; visibility: visible; }
+        .body.chat-collapsed .chat { display: flex; }
+        .chat-resizer { display: none; }
+        .scrim { position: absolute; inset: 0; left: 48px; z-index: 40; background: rgba(0, 0, 0, 0.5); }
+        .scrim[hidden] { display: none; }
+      }
+    </style>
   </head>
   <body>
     <div id="app">
@@ -30,7 +122,11 @@
         </div>
 
         <div class="titlebar-right">
-          <button class="tb-btn" id="btn-toggle-right" data-command="toggle-chat" title="Toggle AI Chat (Ctrl+Alt+C)" aria-label="Toggle AI chat panel">
+          <button class="tb-btn" id="btn-theme" data-command="toggle-theme" title="Toggle light / dark theme (Ctrl+Alt+T)" aria-label="Toggle light or dark theme">
+            <svg class="icon-sun" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="3"/><path d="M8 1v1.7M8 13.3V15M1 8h1.7M13.3 8H15M3.1 3.1l1.2 1.2M11.7 11.7l1.2 1.2M12.9 3.1l-1.2 1.2M4.3 11.7l-1.2 1.2"/></svg>
+            <svg class="icon-moon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M13.6 9.7A5.7 5.7 0 0 1 6.3 2.4a5.9 5.9 0 1 0 7.3 7.3Z"/></svg>
+          </button>
+          <button class="tb-btn" id="btn-toggle-right" title="Toggle AI Chat (Ctrl+Alt+C)" aria-label="Toggle AI chat panel">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.2" y="2.2" width="13.6" height="11.6" rx="1.6"/><path d="M10.2 2.2v11.6"/></svg>
           </button>
           <button class="tb-btn" id="btn-settings" data-command="settings" title="Chat settings" aria-label="Chat settings">
@@ -121,6 +217,9 @@
             </div>
           </div>
         </main>
+
+        <!-- Backdrop behind the mobile side-panel drawers -->
+        <div class="scrim" id="scrim" hidden></div>
 
         <!-- Chat resizer -->
         <div class="chat-resizer" id="chat-resizer" title="Drag to resize" role="separator" aria-orientation="vertical"></div>

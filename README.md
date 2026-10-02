@@ -9,7 +9,7 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
 ## What it does
 
 - **VS Code shell** — title bar, activity bar, explorer, tabs, status bar, command palette
-  (`Ctrl+P`), search view, breadcrumbs, minimap, bracket-pair colouring, Dark+ theme.
+  (`Ctrl+P`), search view, breadcrumbs, minimap, bracket-pair colouring.
 - **Real files** — *Open Folder* loads a directory from your machine via the File System
   Access API (Chrome/Edge) and `Ctrl+S` writes changes back to disk. Browsers without the
   picker fall back to `<input type="file">` / drag-and-drop, and an in-memory demo
@@ -22,6 +22,11 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   - run slash commands: `/explain`, `/fix`, `/tests`, `/refactor`, `/docs`.
 - **Syntax diagnostics** in the status bar for open files (semantic analysis is off — a
   browser tab has no `node_modules`).
+- **Light and dark themes** — the title-bar toggle (`Ctrl+Alt+T`) switches the whole IDE
+  between **One Dark Pro** and **One Dark Pro Light**, Monaco editor palette included.
+  Your choice is remembered; with nothing saved, the OS preference is used.
+- **Responsive layout** — below 900px the side bar and chat panel become off-canvas
+  drawers over the editor with a tap-to-dismiss scrim, so the IDE works on a phone.
 
 ## Quick start
 
@@ -41,6 +46,7 @@ Prefer to bake one in for local use? Copy `.env.example` to `.env.local` and set
 | Shortcut | Action |
 |---|---|
 | `Ctrl+Alt+C` | Toggle the AI chat panel |
+| `Ctrl+Alt+T` | Toggle One Dark Pro light / dark |
 | `Ctrl+P` | Quick open a file |
 | `Ctrl+S` | Save the active file (writes to disk for real folders) |
 | `Ctrl+B` | Toggle the side bar |

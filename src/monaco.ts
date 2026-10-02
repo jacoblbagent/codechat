@@ -141,60 +141,129 @@ export function folderIcon(open: boolean): string {
     : `<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1.8 12.4V4a1 1 0 0 1 1-1h3.1l1.3 1.5h6a1 1 0 0 1 1 1v6.9a1 1 0 0 1-1 1H2.8a1 1 0 0 1-1-1Z" stroke="${color}" stroke-width="1.2" stroke-linejoin="round"/></svg>`
 }
 
-/* ── Theme: VS Code Dark+ approximation ──────────────────────── */
+/* ── Themes: One Dark Pro (dark) and One Dark Pro Light ───────
+   Both are registered up front so switching themes is instant and the
+   editor never lags behind the shell chrome. */
+export type ThemeName = 'dark' | 'light'
+
+export const MONACO_THEME: Record<ThemeName, string> = {
+  dark: 'codechat-one-dark',
+  light: 'codechat-one-light',
+}
+
+const DARK_RULES = [
+  { token: 'comment', foreground: '5c6370', fontStyle: 'italic' },
+  { token: 'keyword', foreground: 'c678dd' },
+  { token: 'keyword.control', foreground: 'c678dd' },
+  { token: 'string', foreground: '98c379' },
+  { token: 'number', foreground: 'd19a66' },
+  { token: 'type', foreground: 'e5c07b' },
+  { token: 'type.identifier', foreground: 'e5c07b' },
+  { token: 'identifier', foreground: 'e06c75' },
+  { token: 'variable', foreground: 'e06c75' },
+  { token: 'function', foreground: '61afef' },
+  { token: 'delimiter', foreground: 'abb2bf' },
+  { token: 'operator', foreground: '56b6c2' },
+  { token: 'tag', foreground: 'e06c75' },
+  { token: 'attribute.name', foreground: 'd19a66' },
+  { token: 'attribute.value', foreground: '98c379' },
+]
+
+const LIGHT_RULES = [
+  { token: 'comment', foreground: 'a0a1a7', fontStyle: 'italic' },
+  { token: 'keyword', foreground: 'a626a4' },
+  { token: 'keyword.control', foreground: 'a626a4' },
+  { token: 'string', foreground: '50a14f' },
+  { token: 'number', foreground: '986801' },
+  { token: 'type', foreground: 'c18401' },
+  { token: 'type.identifier', foreground: 'c18401' },
+  { token: 'identifier', foreground: 'e45649' },
+  { token: 'variable', foreground: 'e45649' },
+  { token: 'function', foreground: '4078f2' },
+  { token: 'delimiter', foreground: '383a42' },
+  { token: 'operator', foreground: '0184bc' },
+  { token: 'tag', foreground: 'e45649' },
+  { token: 'attribute.name', foreground: '986801' },
+  { token: 'attribute.value', foreground: '50a14f' },
+]
+
 let defined = false
 export function defineTheme(): void {
   if (defined) return
   defined = true
-  monaco.editor.defineTheme('codechat-dark', {
+
+  monaco.editor.defineTheme(MONACO_THEME.dark, {
     base: 'vs-dark',
     inherit: true,
-    rules: [
-      { token: 'comment', foreground: '6A9955', fontStyle: 'italic' },
-      { token: 'keyword', foreground: '569CD6' },
-      { token: 'keyword.control', foreground: 'C586C0' },
-      { token: 'string', foreground: 'CE9178' },
-      { token: 'number', foreground: 'B5CEA8' },
-      { token: 'type', foreground: '4EC9B0' },
-      { token: 'type.identifier', foreground: '4EC9B0' },
-      { token: 'identifier', foreground: '9CDCFE' },
-      { token: 'delimiter', foreground: 'D4D4D4' },
-      { token: 'tag', foreground: '569CD6' },
-      { token: 'attribute.name', foreground: '9CDCFE' },
-      { token: 'attribute.value', foreground: 'CE9178' },
-      { token: 'variable', foreground: '9CDCFE' },
-      { token: 'function', foreground: 'DCDCAA' },
-    ],
+    rules: DARK_RULES,
     colors: {
-      'editor.background': '#1E1E1E',
-      'editor.foreground': '#D4D4D4',
-      'editorLineNumber.foreground': '#858585',
-      'editorLineNumber.activeForeground': '#C6C6C6',
-      'editor.selectionBackground': '#264F78',
-      'editor.inactiveSelectionBackground': '#3A3D41',
-      'editor.lineHighlightBackground': '#282828',
-      'editorCursor.foreground': '#AEAFAD',
-      'editorIndentGuide.background1': '#404040',
-      'editorIndentGuide.activeBackground1': '#707070',
-      'editorWhitespace.foreground': '#3B3B3B',
-      'editorBracketMatch.background': '#0064001A',
-      'editorBracketMatch.border': '#888888',
-      'editorGutter.background': '#1E1E1E',
-      'editorWidget.background': '#252526',
-      'editorWidget.border': '#454545',
-      'editorSuggestWidget.background': '#252526',
-      'editorSuggestWidget.selectedBackground': '#04395E',
-      'editorHoverWidget.background': '#252526',
-      'scrollbarSlider.background': '#79797966',
-      'scrollbarSlider.hoverBackground': '#646464B3',
-      'minimap.background': '#1E1E1E',
+      'editor.background': '#282c34',
+      'editor.foreground': '#abb2bf',
+      'editorLineNumber.foreground': '#495162',
+      'editorLineNumber.activeForeground': '#abb2bf',
+      'editor.selectionBackground': '#3e4451',
+      'editor.inactiveSelectionBackground': '#3a3f4b',
+      'editor.lineHighlightBackground': '#2c313a',
+      'editorCursor.foreground': '#528bff',
+      'editorIndentGuide.background1': '#3b4048',
+      'editorIndentGuide.activeBackground1': '#525a66',
+      'editorWhitespace.foreground': '#3b4048',
+      'editorBracketMatch.background': '#61afef22',
+      'editorBracketMatch.border': '#61afef',
+      'editorGutter.background': '#282c34',
+      'editorWidget.background': '#21252b',
+      'editorWidget.border': '#181a1f',
+      'editorSuggestWidget.background': '#21252b',
+      'editorSuggestWidget.selectedBackground': '#2c313a',
+      'editorHoverWidget.background': '#21252b',
+      'scrollbarSlider.background': '#4e566680',
+      'scrollbarSlider.hoverBackground': '#5c6370b3',
+      'minimap.background': '#282c34',
+    },
+  })
+
+  monaco.editor.defineTheme(MONACO_THEME.light, {
+    base: 'vs',
+    inherit: true,
+    rules: LIGHT_RULES,
+    colors: {
+      'editor.background': '#fafafa',
+      'editor.foreground': '#383a42',
+      'editorLineNumber.foreground': '#9d9d9f',
+      'editorLineNumber.activeForeground': '#383a42',
+      'editor.selectionBackground': '#e5e5e6',
+      'editor.inactiveSelectionBackground': '#f0f0f1',
+      'editor.lineHighlightBackground': '#f2f2f2',
+      'editorCursor.foreground': '#526fff',
+      'editorIndentGuide.background1': '#d3d3d3',
+      'editorIndentGuide.activeBackground1': '#939393',
+      'editorWhitespace.foreground': '#d3d3d3',
+      'editorBracketMatch.background': '#4078f233',
+      'editorBracketMatch.border': '#4078f2',
+      'editorGutter.background': '#fafafa',
+      'editorWidget.background': '#f0f0f1',
+      'editorWidget.border': '#d4d4d5',
+      'editorSuggestWidget.background': '#f0f0f1',
+      'editorSuggestWidget.selectedBackground': '#e5e5e6',
+      'editorHoverWidget.background': '#f0f0f1',
+      'scrollbarSlider.background': '#00000026',
+      'scrollbarSlider.hoverBackground': '#00000040',
+      'minimap.background': '#fafafa',
     },
   })
 }
 
-export function editorOptions(): monaco.editor.IStandaloneEditorConstructionOptions {
+/** Paint the editor with a palette. Safe to call before or after creation. */
+export function setMonacoTheme(theme: ThemeName): void {
+  defineTheme()
+  monaco.editor.setTheme(MONACO_THEME[theme])
+}
+
+export function editorOptions(
+  theme: ThemeName = 'dark',
+): monaco.editor.IStandaloneEditorConstructionOptions {
   return {
-    theme: 'codechat-dark',
+    theme: MONACO_THEME[theme],
     automaticLayout: true,
     fontFamily: "'SF Mono', 'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, monospace",
     fontSize: 13,

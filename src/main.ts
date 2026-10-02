@@ -9,6 +9,8 @@ import {
   languageFor,
   languageLabel,
   monaco,
+  setMonacoTheme,
+  type ThemeName,
   uriFor,
 } from './monaco'
 import { Workspace, type SearchHit } from './workspace'
@@ -27,6 +29,7 @@ interface UiState {
   chatCollapsed: boolean
   chatWidth: number
   sidebarWidth: number
+  theme: ThemeName
 }
 
 const SETTINGS_KEY = 'codechat.settings.v1'
@@ -53,8 +56,23 @@ function saveSettings(s: Settings): void {
   }
 }
 
+/**
+ * The theme the pre-paint script in index.html already resolved. Reading it
+ * back avoids a second, possibly different, decision on first load.
+ */
+function initialTheme(): ThemeName {
+  const preset = document.documentElement.dataset.theme
+  if (preset === 'light' || preset === 'dark') return preset
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+}
+
 function loadUi(): UiState {
-  const fallback: UiState = { chatCollapsed: false, chatWidth: 400, sidebarWidth: 240 }
+  const fallback: UiState = {
+    chatCollapsed: false,
+    chatWidth: 400,
+    sidebarWidth: 240,
+    theme: initialTheme(),
+  }
   try {
     const raw = localStorage.getItem(UI_KEY)
     if (!raw) return fallback
@@ -93,7 +111,9 @@ const els = {
   quickList: $('quick-list'),
   toasts: $('toasts'),
   chatResizer: $('chat-resizer'),
+  scrim: $('scrim'),
   btnToggleRight: $('btn-toggle-right'),
+  btnTheme: $('btn-theme'),
   sbPos: $('sb-pos'),
   sbIndent: $('sb-indent'),
   sbLang: $('sb-lang'),
@@ -239,6 +259,8 @@ function openFile(path: string, keepFocus = false): void {
   renderTree()
   chat.setActiveFile(path)
   if (!keepFocus) editor.focus()
+  // On a narrow screen get the drawer out of the way of the file just opened.
+  if (isNarrow()) setSidebarOpen(false)
 }
 
 function closeTab(path: string): void {
@@ -604,6 +626,7 @@ function createFileFromCode(code: string, lang: string): void {
 
 function openSettings(): void {
   setView('settings')
+  if (isNarrow()) setSidebarOpen(true)
   els.setKey.focus()
 }
 
@@ -623,12 +646,7 @@ chat = new ChatPanel({
 
 type ViewName = 'explorer' | 'search' | 'settings'
 
-function setView(view: ViewName | 'chat'): void {
-  if (view === 'chat') {
-    setChatCollapsed(false)
-    chat.focus()
-    return
-  }
+function setView(view: ViewName): void {
   for (const panel of document.querySelectorAll<HTMLElement>('[data-view-panel]')) {
     panel.classList.toggle('is-hidden', panel.dataset.viewPanel !== view)
   }
@@ -637,47 +655,150 @@ function setView(view: ViewName | 'chat'): void {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════
+   Layout — fixed columns on desktop, overlay drawers on narrow screens
+   ══════════════════════════════════════════════════════════════ */
+
+const narrow = window.matchMedia('(max-width: 900px)')
+const isNarrow = (): boolean => narrow.matches
+
+function relayout(): void {
+  requestAnimationFrame(() => editor.layout())
+}
+
+function syncScrim(): void {
+  const open =
+    els.body.classList.contains('sidebar-open') || els.body.classList.contains('chat-open')
+  els.scrim.hidden = !open
+}
+
+function syncChatButton(): void {
+  const on = isNarrow() ? els.body.classList.contains('chat-open') : !ui.chatCollapsed
+  els.btnToggleRight.classList.toggle('is-on', on)
+}
+
+/** Slide the sidebar in over the editor. No-op on desktop. */
+function setSidebarOpen(open: boolean): void {
+  if (!isNarrow()) return
+  els.body.classList.toggle('sidebar-open', open)
+  if (open) els.body.classList.remove('chat-open')
+  syncScrim()
+  syncChatButton()
+  relayout()
+}
+
+/** Slide the chat panel in over the editor. No-op on desktop. */
+function setChatOpen(open: boolean): void {
+  if (!isNarrow()) return
+  els.body.classList.toggle('chat-open', open)
+  if (open) els.body.classList.remove('sidebar-open')
+  syncScrim()
+  syncChatButton()
+  relayout()
+}
+
+function closeDrawers(): void {
+  if (!els.body.classList.contains('sidebar-open') && !els.body.classList.contains('chat-open')) {
+    return
+  }
+  els.body.classList.remove('sidebar-open', 'chat-open')
+  syncScrim()
+  syncChatButton()
+  relayout()
+}
+
 function setChatCollapsed(collapsed: boolean): void {
   ui.chatCollapsed = collapsed
   els.body.classList.toggle('chat-collapsed', collapsed)
-  els.btnToggleRight.classList.toggle('is-on', !collapsed)
   saveUi(ui)
-  if (!collapsed) {
-    // Recompute the editor layout after the grid column changes.
-    requestAnimationFrame(() => editor.layout())
-  } else {
-    requestAnimationFrame(() => {
-      editor.layout()
-      editor.focus()
-    })
+  syncChatButton()
+  relayout()
+}
+
+/** The one way to toggle the AI panel, whatever the screen size. */
+function toggleChatPanel(): void {
+  if (isNarrow()) {
+    const open = !els.body.classList.contains('chat-open')
+    setChatOpen(open)
+    if (open) chat.focus()
+    return
   }
+  setChatCollapsed(!ui.chatCollapsed)
+}
+
+const THEME_TITLE: Record<ThemeName, string> = {
+  dark: 'Switch to light theme (Ctrl+Alt+T)',
+  light: 'Switch to dark theme (Ctrl+Alt+T)',
+}
+
+function syncThemeButton(): void {
+  els.btnTheme.title = THEME_TITLE[ui.theme]
+  els.btnTheme.setAttribute('aria-label', THEME_TITLE[ui.theme])
+}
+
+/** Swap between One Dark Pro and One Dark Pro Light. */
+function toggleTheme(): void {
+  ui.theme = ui.theme === 'dark' ? 'light' : 'dark'
+  document.documentElement.dataset.theme = ui.theme
+  setMonacoTheme(ui.theme)
+  syncThemeButton()
+  saveUi(ui)
 }
 
 function applyUi(): void {
   document.documentElement.style.setProperty('--chat-w', `${ui.chatWidth}px`)
   document.documentElement.style.setProperty('--sidebar-w', `${ui.sidebarWidth}px`)
+  document.documentElement.dataset.theme = ui.theme
+  setMonacoTheme(ui.theme)
+  syncThemeButton()
   setChatCollapsed(ui.chatCollapsed)
-  els.btnToggleRight.classList.toggle('is-on', !ui.chatCollapsed)
+  syncScrim()
 }
 
+/* Activity bar */
 for (const btn of document.querySelectorAll<HTMLElement>('.act-btn[data-view]')) {
   btn.addEventListener('click', () => {
     const view = btn.dataset.view as ViewName | 'chat'
     if (view === 'chat') {
-      // Clicking the AI icon when the panel is already open focuses it.
-      if (!ui.chatCollapsed) chat.focus()
-      else setChatCollapsed(false)
+      toggleChatPanel()
+      return
+    }
+    if (isNarrow()) {
+      // Tapping the view that is already showing closes the drawer again.
+      if (els.body.classList.contains('sidebar-open') && btn.classList.contains('is-active')) {
+        closeDrawers()
+        return
+      }
+      setView(view)
+      setSidebarOpen(true)
       return
     }
     setView(view)
   })
 }
 
-els.btnToggleRight.addEventListener('click', () => setChatCollapsed(!ui.chatCollapsed))
-document.getElementById('btn-chat-close')?.addEventListener('click', () => setChatCollapsed(true))
+els.btnToggleRight.addEventListener('click', toggleChatPanel)
+document.getElementById('btn-chat-close')?.addEventListener('click', () => {
+  if (isNarrow()) closeDrawers()
+  else setChatCollapsed(true)
+})
 els.sbAi.addEventListener('click', () => {
+  if (isNarrow()) {
+    const open = !els.body.classList.contains('chat-open')
+    setChatOpen(open)
+    if (open) chat.focus()
+    return
+  }
   if (ui.chatCollapsed) setChatCollapsed(false)
   else chat.focus()
+})
+
+els.scrim.addEventListener('click', closeDrawers)
+
+// Crossing the breakpoint must never leave a drawer stuck open.
+narrow.addEventListener('change', () => {
+  closeDrawers()
+  relayout()
 })
 
 /* Resizer */
@@ -813,7 +934,8 @@ async function saveActive(): Promise<void> {
 const commands: Record<string, () => void> = {
   'open-folder': () => void openFolder(),
   'quick-open': () => openQuickOpen(),
-  'toggle-chat': () => setChatCollapsed(!ui.chatCollapsed),
+  'toggle-chat': () => toggleChatPanel(),
+  'toggle-theme': () => toggleTheme(),
   settings: () => openSettings(),
 }
 
@@ -826,7 +948,12 @@ window.addEventListener('keydown', (e) => {
 
   if (mod && e.altKey && e.key.toLowerCase() === 'c') {
     e.preventDefault()
-    setChatCollapsed(!ui.chatCollapsed)
+    toggleChatPanel()
+    return
+  }
+  if (mod && e.altKey && e.key.toLowerCase() === 't') {
+    e.preventDefault()
+    toggleTheme()
     return
   }
   if (mod && !e.shiftKey && e.key.toLowerCase() === 'p') {
@@ -841,12 +968,17 @@ window.addEventListener('keydown', (e) => {
   }
   if (mod && e.key.toLowerCase() === 'b') {
     e.preventDefault()
-    document.querySelector('.sidebar')?.classList.toggle('is-hidden')
+    if (isNarrow()) setSidebarOpen(!els.body.classList.contains('sidebar-open'))
+    else document.querySelector('.sidebar')?.classList.toggle('is-hidden')
     editor.layout()
     return
   }
   if (e.key === 'Escape') {
-    if (!els.quickOpen.classList.contains('is-hidden')) closeQuickOpen()
+    if (!els.quickOpen.classList.contains('is-hidden')) {
+      closeQuickOpen()
+      return
+    }
+    closeDrawers()
     return
   }
   if (mod && e.shiftKey && e.key.toLowerCase() === 'k') {
@@ -925,4 +1057,16 @@ if (!settings.apiKey) {
 window.addEventListener('resize', () => editor.layout())
 
 // Expose a tiny handle for manual poking from the console.
-;(window as any).codechat = { workspace, editor, chat, monaco, get settings() { return settings } }
+;(window as any).codechat = {
+  workspace,
+  editor,
+  chat,
+  monaco,
+  get settings() {
+    return settings
+  },
+  get theme() {
+    return ui.theme
+  },
+  toggleTheme,
+}
