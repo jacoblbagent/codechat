@@ -58,6 +58,10 @@ export class SettingsPage {
   private empty: HTMLElement
   private rows = new Map<string, { row: HTMLElement; sync: () => void }>()
   private query = ''
+  /** 'all', or one of the scopes in the catalogue (`vscode`, `app`). */
+  private scope = 'all'
+  private chips: HTMLElement[] = []
+  private counts = new Map<string, HTMLElement>()
 
   constructor(deps: SettingsUiDeps) {
     this.deps = deps
@@ -72,7 +76,16 @@ export class SettingsPage {
       this.applyFilter()
     })
     document.getElementById('btn-settings-close')?.addEventListener('click', () => this.close())
+
+    for (const chip of Array.from(q('set-filter').querySelectorAll<HTMLElement>('.sp-chip'))) {
+      this.chips.push(chip)
+      const n = chip.querySelector<HTMLElement>('.sp-chip-n')
+      if (n) this.counts.set(chip.dataset.scope ?? '', n)
+      chip.addEventListener('click', () => this.setScope(chip.dataset.scope ?? 'all'))
+    }
+
     this.build()
+    this.renderCounts()
   }
 
   open(): void {
@@ -91,6 +104,27 @@ export class SettingsPage {
   /** Re-read every control from the store (used when another surface changes a value). */
   refresh(): void {
     for (const { sync } of this.rows.values()) sync()
+  }
+
+  /* ── scope filter ─────────────────────────────────────────── */
+  private setScope(scope: string): void {
+    this.scope = scope
+    for (const chip of this.chips) {
+      const on = chip.dataset.scope === scope
+      chip.classList.toggle('is-on', on)
+      chip.setAttribute('aria-selected', String(on))
+    }
+    this.applyFilter()
+  }
+
+  /** How many settings each chip stands for. Counted from the catalogue. */
+  private renderCounts(): void {
+    const totals = new Map<string, number>([['all', 0]])
+    for (const group of SETTING_GROUPS) {
+      totals.set(group.scope, (totals.get(group.scope) ?? 0) + group.settings.length)
+      totals.set('all', (totals.get('all') ?? 0) + group.settings.length)
+    }
+    for (const [scope, el] of this.counts) el.textContent = String(totals.get(scope) ?? 0)
   }
 
   /* ── build ────────────────────────────────────────────────── */
@@ -355,12 +389,13 @@ export class SettingsPage {
     for (const group of SETTING_GROUPS) {
       const section = this.list.querySelector<HTMLElement>(`[data-group="${group.id}"]`)
       if (!section) continue
+      const inScope = this.scope === 'all' || group.scope === this.scope
       let groupShown = 0
       for (const def of group.settings) {
         const entry = this.rows.get(def.id)
         if (!entry) continue
         const hay = `${def.id} ${def.label} ${def.description} ${group.label}`.toLowerCase()
-        const hit = !q || q.split(/\s+/).every((part) => hay.includes(part))
+        const hit = inScope && (!q || q.split(/\s+/).every((part) => hay.includes(part)))
         entry.row.classList.toggle('is-hidden', !hit)
         if (hit) groupShown += 1
       }

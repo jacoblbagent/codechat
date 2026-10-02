@@ -235,14 +235,41 @@
             <div class="settings-page is-hidden" id="settings-page">
               <div class="sp-head">
                 <input id="set-search" class="field sp-search" type="search" placeholder="Search settings…" aria-label="Search settings" />
+                <button class="mini-btn sp-json-btn" id="btn-open-settings-json" title="Open settings.json" aria-label="Open settings.json">{ }</button>
                 <button class="mini-btn" id="btn-settings-close" title="Close settings" aria-label="Close settings">
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 4l8 8M12 4l-8 8"/></svg>
                 </button>
+              </div>
+              <!-- Scope filter: narrows the list to one half of the catalogue.
+                   Counts are filled in by settings-ui.ts. -->
+              <div class="sp-filter" id="set-filter" role="tablist" aria-label="Filter settings">
+                <button class="sp-chip is-on" data-scope="all" role="tab" aria-selected="true">All<span class="sp-chip-n"></span></button>
+                <button class="sp-chip" data-scope="vscode" role="tab" aria-selected="false">VS Code<span class="sp-chip-n"></span></button>
+                <button class="sp-chip" data-scope="app" role="tab" aria-selected="false">CodeChat<span class="sp-chip-n"></span></button>
               </div>
               <div class="sp-body">
                 <div class="sp-empty is-hidden" id="set-empty">No settings match your search.</div>
                 <div class="sp-list" id="set-list"></div>
               </div>
+            </div>
+
+            <!-- settings.json: the same settings as text. Editing either side
+                 updates the other; see src/settings-json.ts. -->
+            <div class="settings-page is-hidden" id="settings-json">
+              <div class="sp-head">
+                <span class="sj-title">settings.json</span>
+                <span class="sj-status" id="sj-status" role="status" aria-live="polite"></span>
+                <button class="mini-btn" id="btn-sj-ui" title="Open the Settings UI">Settings UI</button>
+                <button class="mini-btn" id="btn-sj-close" title="Close settings.json" aria-label="Close settings.json">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+                </button>
+              </div>
+              <p class="sj-note">
+                Every setting, as text — edits apply as you type, and the Settings UI updates
+                this file. It contains your OpenRouter API key in plain text and lives in this
+                browser only.
+              </p>
+              <div class="sj-host" id="sj-host"></div>
             </div>
           </div>
         </main>

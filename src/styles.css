@@ -469,6 +469,23 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   display: flex; align-items: center; gap: 8px; flex: none;
   padding: 10px 14px; border-bottom: 1px solid var(--border);
 }
+.sp-json-btn { font-family: var(--mono); font-size: 11px; }
+
+/* ── settings.json ─────────────────────────────────────────── */
+.sj-title { flex: none; font: 600 13px var(--mono); color: var(--fg-bright); }
+.sj-status {
+  flex: 1 1 auto; min-width: 0; overflow: hidden;
+  font-size: 11.5px; color: var(--fg-dim); text-overflow: ellipsis; white-space: nowrap;
+}
+.sj-status.is-ok { color: var(--green); }
+.sj-status.is-warn { color: var(--yellow); }
+.sj-status.is-err { color: var(--red); }
+.sj-note {
+  flex: none; margin: 0; padding: 6px 14px;
+  font-size: 11px; line-height: 1.45; color: var(--fg-dim);
+  border-bottom: 1px solid var(--border-soft);
+}
+.sj-host { flex: 1 1 auto; min-height: 0; position: relative; }
 .sp-search { flex: 1; max-width: 440px; }
 .sp-body { flex: 1; overflow-y: auto; padding: 2px 14px 28px; }
 .sp-empty { padding: 26px 0; font-size: 13px; color: var(--fg-dim); }
@@ -1065,4 +1082,36 @@ kbd {
   .chat-head { padding: 0 6px; }
   .welcome { padding: 20px 16px; }
   .welcome h1 { font-size: 26px; }
+}
+
+/* ── scope filter ──────────────────────────────────────────── */
+.sp-filter { display: flex; flex: none; gap: 4px; padding: 8px 14px 0; }
+.sp-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; font: inherit; font-size: 11.5px;
+  color: var(--fg-dim); background: transparent;
+  border: 1px solid var(--border); border-radius: 4px; cursor: pointer;
+  touch-action: manipulation;
+}
+.sp-chip:hover { color: var(--fg); }
+.sp-chip.is-on { color: var(--fg-bright); background: var(--bg-hover); border-color: var(--border-strong); }
+.sp-chip-n { font-size: 10.5px; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+.sp-chip.is-on .sp-chip-n { color: var(--fg); }
+
+/*
+ * Touch. A double tap on a control must not be read as a zoom gesture, so every
+ * control opts out of one while keeping pan and pinch: `manipulation` drops only
+ * the double-tap-to-zoom half of the default `auto`. Zooming the page itself
+ * still works, which `user-scalable=no` would have taken away.
+ */
+button, a, input, select, textarea, label,
+[role='button'], [role='tab'], .act-btn, .tab, .row, .sp-chip {
+  touch-action: manipulation;
+}
+
+@media (max-width: 640px) {
+  /* iOS zooms the page when it focuses a control whose text is under 16px.
+     Every field in the chrome is smaller than that here, and each one carries a
+     class that would out-specify a plain rule, so this one has to win outright. */
+  input, select, textarea { font-size: 16px !important; }
 }

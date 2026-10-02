@@ -18,6 +18,7 @@ import { diffStat, type DiffStat } from './diff'
 import { ModelPicker } from './model-picker'
 import { fmtAgo, Repo, type Commit, type CommitFile } from './scm'
 import { buildMonacoOptions, defaultCore, settingById, type SettingDef } from './settings'
+import { JSON_SETTINGS, SettingsJsonView } from './settings-json'
 import { SettingsPage } from './settings-ui'
 import { Workspace, type SearchHit, type WsFile } from './workspace'
 
@@ -160,6 +161,10 @@ function saveUi(u: UiState): void {
   } catch {
     /* ignore */
   }
+  // Every write — a settings row, the theme toggle, a width drag — lands here,
+  // so this is the one place settings.json has to be told about. A bulk apply
+  // from settings.json itself is not an outside change.
+  if (!applyingSettingsJson) settingsJson?.externalChange()
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -801,8 +806,12 @@ document.getElementById('btn-scm-save-all')?.addEventListener('click', () => {
    ══════════════════════════════════════════════════════════════ */
 
 function openFile(path: string, keepFocus = false): void {
-  // Opening a file always leaves the settings page.
+  // Opening a file always leaves the settings overlays — and on a narrow
+  // screen it dismisses the drawer they were tapped from, or the editor it
+  // just opened would be sitting behind it.
   closeSettings()
+  settingsJson?.close()
+  closeDrawers()
   const file = workspace.get(path)
   if (!file) {
     toast(`No such file: ${path}`, 'err')
@@ -1241,12 +1250,21 @@ let creditsRow: CreditsRow | null = null
 
 /** The gear opens the settings page in the editor area, like VS Code. */
 function openSettings(): void {
+  settingsJson?.close()
+  closeDrawers()
   settingsPage.open()
   settingsPage.refresh()
   syncSettingsButton()
   // The balance is the one thing on the page that has to be asked for; it is
   // loaded when the page opens rather than at boot, and cached for a minute.
   void creditsRow?.load()
+}
+
+/** settings.json takes over the same editor area, so only one of them shows. */
+function openSettingsJson(): void {
+  closeSettings()
+  closeDrawers()
+  settingsJson?.open()
 }
 
 function closeSettings(): void {
@@ -1270,6 +1288,10 @@ function syncSettingsButton(): void {
 
 let chatPicker: ModelPicker | null = null
 let settingsModelPicker: ModelPicker | null = null
+/* Built with the settings surfaces below, but every settings write has to be
+   able to reach it — `saveUi` is the single choke point those writes pass. */
+let settingsJson: SettingsJsonView | null = null
+let applyingSettingsJson = false
 
 /**
  * One model, two triggers: after any change the header badge, the settings
@@ -1719,6 +1741,10 @@ window.addEventListener('keydown', (e) => {
       closeSettings()
       return
     }
+    if (settingsJson?.isOpen) {
+      settingsJson.close()
+      return
+    }
     closeDrawers()
     return
   }
@@ -1856,6 +1882,49 @@ function setSetting(def: SettingDef, value: unknown): void {
 function resetSetting(def: SettingDef): void {
   setSetting(def, def.default)
 }
+
+/* ══════════════════════════════════════════════════════════════
+   settings.json
+   ══════════════════════════════════════════════════════════════ */
+
+/** Two values are the same setting value, whatever type they arrived as. */
+function sameSettingValue(a: unknown, b: unknown): boolean {
+  if (typeof a === 'number' || typeof b === 'number') return Number(a) === Number(b)
+  return a === b
+}
+
+/**
+ * Apply a whole settings.json document. Present keys are set; absent keys go
+ * back to their default, which is what deleting a line in VS Code's
+ * settings.json does. Everything goes through `setSetting`, so persistence and
+ * the apply hooks run exactly as they do from the settings page — but only for
+ * settings that actually changed, so a one-line edit costs one write.
+ */
+function applySettingsFromJson(values: Record<string, unknown>): void {
+  applyingSettingsJson = true
+  try {
+    for (const def of JSON_SETTINGS) {
+      const present = Object.prototype.hasOwnProperty.call(values, def.id)
+      const next = present ? values[def.id] : def.default
+      if (sameSettingValue(getSetting(def), next)) continue
+      setSetting(def, next)
+    }
+  } finally {
+    applyingSettingsJson = false
+  }
+  // The document is the source of truth for what was just written; make sure
+  // the JSON-language diagnostics catch up now rather than on the next edit.
+  editor.layout()
+}
+
+settingsJson = new SettingsJsonView({
+  get: (def) => getSetting(def),
+  apply: applySettingsFromJson,
+})
+
+document.getElementById('btn-open-settings-json')?.addEventListener('click', () => openSettingsJson())
+document.getElementById('btn-sj-ui')?.addEventListener('click', () => openSettings())
+document.getElementById('btn-sj-close')?.addEventListener('click', () => settingsJson?.close())
 
 const settingsPage = new SettingsPage({
   get: getSetting,

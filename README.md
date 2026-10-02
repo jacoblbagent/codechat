@@ -18,11 +18,21 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   Indentation / Display / Minimap / Scrolling / Suggestions / Editing, plus Workbench and
   Files) and **CodeChat**, for the settings this app adds on top. Every control applies
   immediately, sits behind a search box that matches names, ids and descriptions, and shows
-  a coloured gutter plus a reset arrow when it differs from the default. The CodeChat
+  a coloured gutter plus a reset arrow when it differs from the default. **All / VS Code /
+  CodeChat** chips above the list narrow it to one half of the catalogue, with a count on
+  each, and they stack with the search rather than replacing it. The CodeChat
   section also carries a read-only **Credits** row: your remaining balance, what this key
   has spent, today's and this month's usage, and a Refresh button. It is fetched when the
   page opens (cached for a minute), never at boot, and the request goes to OpenRouter with
   the same key the chat uses — nowhere else.
+- **`settings.json`** — the `{ }` button in the settings header opens the same settings as
+  text, under VS Code's own ids (`"editor.fontSize"`, `"codechat.model"`). Both directions
+  are live: editing the file applies as you type, and changing a setting anywhere else
+  rewrites just those lines, leaving your own indentation, key order and blank lines alone.
+  A key you delete goes back to its default; broken JSON applies nothing and keeps your
+  text; an unknown key, or a value of the wrong type, is skipped and named in the header.
+  It holds your OpenRouter key in plain text and is stored in this browser with the rest of
+  your settings — the header says so.
 - **Real files** — *Open Folder* loads a directory from your machine via the File System
   Access API (Chrome/Edge) and `Ctrl+S` writes changes back to disk. Browsers without the
   picker fall back to `<input type="file">` / drag-and-drop, and an in-memory demo
@@ -93,6 +103,11 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   Your choice is remembered; the default is One Dark Pro dark.
 - **Responsive layout** — below 900px the side bar and chat panel become off-canvas
   drawers over the editor with a tap-to-dismiss scrim, so the IDE works on a phone.
+  Opening a file, or the settings page, dismisses the drawer it was tapped from, and below
+  640px form fields are raised to 16px so iOS does not zoom into them on focus.
+- **Touch** — every control sets `touch-action: manipulation`, so a double tap on a button
+  is a double tap rather than a zoom gesture. Panning and pinching the page still work,
+  which a `user-scalable=no` viewport tag would have taken away.
 
 ## Quick start
 
@@ -157,7 +172,8 @@ src/credits-ui.ts   the read-only Credits row in Settings
 src/models.ts       the OpenRouter catalogue: fetch, cache, search, formatting
 src/model-picker.ts the searchable model picker (chat header + Settings)
 src/settings.ts     settings catalogue (VS Code core + CodeChat)
-src/settings-ui.ts  settings page renderer
+src/settings-ui.ts  settings page renderer, scope filter
+src/settings-json.ts settings.json: serialise, parse, patch by key, Monaco view
 src/workspace.ts    in-memory + File System Access workspace, search, tree
 src/monaco.ts       editor factory, workers, One Dark themes, file icons
 src/markdown.ts     dependency-free markdown renderer
