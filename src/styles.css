@@ -485,6 +485,24 @@ kbd {
   content: '▋'; color: var(--blue); animation: pulse 1s steps(2) infinite; margin-left: 1px;
 }
 
+/* Reasoning output, shown above the answer it produced. Collapsed once the
+   answer starts arriving (or in hindsight), so it never buries the reply. */
+.think { margin: 0 0 8px; padding-left: 8px; border-left: 2px solid var(--border-strong); }
+.think-head {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--fg-dim);
+}
+.think-head:hover { color: var(--fg); }
+.think-head svg { flex: none; transition: transform 0.15s ease; }
+.think.is-open .think-head svg { transform: rotate(90deg); }
+.think-body { display: none; }
+.think.is-open .think-body {
+  display: block; margin-top: 5px;
+  font-size: 11.5px; line-height: 1.5; color: var(--fg-dim);
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 240px; overflow-y: auto;
+}
+
 .chat-context {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 6px 12px; border-top: 1px solid var(--border);
@@ -494,6 +512,36 @@ kbd {
 .ctx-file { font-family: var(--mono); color: var(--fg); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ctx-toggle { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .ctx-toggle input { accent-color: var(--blue-btn); margin: 0; }
+
+/* ── Context meter ─────────────────────────────────────────────
+   A live readout of what the next message carries. The bar is a *composition*
+   bar (segments proportional to the total) rather than a budget bar, so a small
+   selection stays visible next to a whole file, and the legend gives the numbers. */
+.ctx-viz { padding: 4px 12px 6px; flex: none; }
+.ctx-viz-bar {
+  display: flex; height: 4px; border-radius: 2px; overflow: hidden;
+  background: var(--bg-input);
+}
+.ctx-seg { height: 100%; min-width: 2px; }
+.ctx-seg.kind-file { background: var(--blue); }
+.ctx-seg.kind-selection { background: var(--green); }
+.ctx-seg.kind-pinned { background: var(--violet); }
+.ctx-viz-legend {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 5px; font-size: 10.5px; line-height: 1.4; color: var(--fg-dim);
+}
+.ctx-chip { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.ctx-chip::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--fg-dim); flex: none;
+}
+.ctx-chip.kind-file::before { background: var(--blue); }
+.ctx-chip.kind-selection::before { background: var(--green); }
+.ctx-chip.kind-pinned::before { background: var(--violet); }
+.ctx-chip b { color: var(--fg); font-weight: 500; font-family: var(--mono); }
+.ctx-chip.is-warn { color: var(--yellow); }
+.ctx-chip.is-warn::before { background: var(--yellow); }
+.ctx-viz-total { margin-left: auto; font-family: var(--mono); }
 
 /* A chunk of code attached with Ctrl+L, waiting to ride along with the next message. */
 .ctx-pin {
@@ -521,8 +569,31 @@ kbd {
   border-radius: 4px; padding: 7px 9px; font: 13px/1.45 var(--ui);
 }
 .chat-input:focus { border-color: var(--blue); outline: none; }
-.compose-row { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
-.compose-hint { font-size: 11px; color: var(--fg-dim); margin-right: auto; }
+.compose-row {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 6px 8px; margin-top: 7px;
+}
+/* Buttons keep their size; if the row runs out of width they wrap to a second
+   line rather than being compressed. */
+.compose-row .btn { flex: none; }
+#btn-add-selection { margin-left: auto; }
+.compose-hint {
+  font-size: 11px; color: var(--fg-dim);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Thinking selector — a per-request reasoning level, persisted with the rest of
+   the settings. 'Off' sends no reasoning fields at all. */
+.think-sel { display: inline-flex; align-items: center; gap: 5px; flex: none; color: var(--fg-dim); }
+.think-sel svg { flex: none; }
+.think-label { font-size: 11px; cursor: pointer; }
+.think-select {
+  height: 22px; padding: 0 3px; border-radius: 3px; cursor: pointer;
+  background: var(--bg-input); border: 1px solid var(--border-strong);
+  color: var(--fg); font: 11px var(--ui);
+}
+.think-select:hover { border-color: var(--border-strong-hover); }
+.think-select:focus-visible { outline: 1px solid var(--blue); }
 
 /* ── Status bar ────────────────────────────────────────────── */
 .statusbar {

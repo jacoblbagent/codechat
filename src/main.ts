@@ -1,6 +1,6 @@
 import './styles.css'
 import { ChatPanel, type ChatStatus } from './chat'
-import { DEFAULT_MODEL, MODELS } from './deepseek'
+import { DEFAULT_MODEL, MODELS, type ReasoningEffort } from './deepseek'
 import {
   defineTheme,
   editorOptions,
@@ -22,6 +22,7 @@ import { Workspace, type SearchHit } from './workspace'
 interface Settings {
   apiKey: string
   model: string
+  reasoning: ReasoningEffort
 }
 
 interface UiState {
@@ -36,12 +37,16 @@ const UI_KEY = 'codechat.ui.v1'
 
 const ENV_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY as string | undefined) ?? ''
 
+const REASONING_LEVELS: ReasoningEffort[] = ['off', 'low', 'medium', 'high']
+
 function loadSettings(): Settings {
-  const fallback: Settings = { apiKey: ENV_KEY, model: DEFAULT_MODEL }
+  const fallback: Settings = { apiKey: ENV_KEY, model: DEFAULT_MODEL, reasoning: 'off' }
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (!raw) return fallback
-    return { ...fallback, ...(JSON.parse(raw) as Partial<Settings>) }
+    const merged = { ...fallback, ...(JSON.parse(raw) as Partial<Settings>) }
+    if (!REASONING_LEVELS.includes(merged.reasoning)) merged.reasoning = 'off'
+    return merged
   } catch {
     return fallback
   }
@@ -123,6 +128,7 @@ const els = {
   setKey: $<HTMLInputElement>('set-key'),
   setModel: $<HTMLSelectElement>('set-model'),
   setModelCustom: $<HTMLInputElement>('set-model-custom'),
+  thinkSelect: $<HTMLSelectElement>('think-select'),
   chatDot: $('chat-dot'),
 }
 
@@ -216,6 +222,10 @@ editor.onDidChangeCursorPosition((e) => {
   els.sbPos.textContent = `Ln ${e.position.lineNumber}, Col ${e.position.column}`
 })
 
+editor.onDidChangeCursorSelection(() => {
+  if (chat) chat.refreshContextViz()
+})
+
 editor.onDidChangeModelContent(() => {
   const path = currentModelPath()
   if (!path) return
@@ -226,6 +236,7 @@ editor.onDidChangeModelContent(() => {
   file.content = model.getValue()
   renderTabs()
   renderTree()
+  if (chat) chat.refreshContextViz()
 })
 
 monaco.editor.onDidChangeMarkers((uris) => {
@@ -1083,10 +1094,17 @@ function syncSettingsForm(): void {
   els.setModel.value = MODELS.some((m) => m.id === settings.model) ? settings.model : '__custom__'
   els.setModelCustom.value = els.setModel.value === '__custom__' ? settings.model : ''
   els.setModelCustom.classList.toggle('is-hidden', els.setModel.value !== '__custom__')
+  els.thinkSelect.value = settings.reasoning
 }
 
 els.setModel.addEventListener('change', () => {
   els.setModelCustom.classList.toggle('is-hidden', els.setModel.value !== '__custom__')
+})
+els.thinkSelect.addEventListener('change', () => {
+  const reasoning = els.thinkSelect.value as ReasoningEffort
+  settings = { ...settings, reasoning }
+  saveSettings(settings)
+  toast(reasoning === 'off' ? 'Thinking off' : `Thinking: ${reasoning}`, 'ok')
 })
 /** Read the settings form into `settings` and write it to localStorage. */
 function persistSettings(announce: boolean): void {
@@ -1094,6 +1112,7 @@ function persistSettings(announce: boolean): void {
   settings = {
     apiKey: els.setKey.value.trim(),
     model: model || DEFAULT_MODEL,
+    reasoning: els.thinkSelect.value as ReasoningEffort,
   }
   saveSettings(settings)
   chat.refreshModelBadge()

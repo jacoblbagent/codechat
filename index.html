@@ -260,6 +260,12 @@
             <label class="ctx-toggle"><input type="checkbox" id="ctx-selection" checked /> selection</label>
           </div>
 
+          <!-- What the next message will actually carry, and how big it is. -->
+          <div class="ctx-viz" id="ctx-viz">
+            <div class="ctx-viz-bar" id="ctx-viz-bar" aria-hidden="true"></div>
+            <div class="ctx-viz-legend" id="ctx-viz-legend" role="status" aria-label="Context for the next message"></div>
+          </div>
+
           <div class="ctx-pin is-hidden" id="ctx-pin">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6 4 12l5 6M15 6l5 6-5 6"/></svg>
             <span class="ctx-pin-label" id="ctx-pin-label"></span>
@@ -267,8 +273,18 @@
           </div>
 
           <div class="chat-compose">
-            <textarea id="chat-input" class="chat-input" rows="1" placeholder="Ask DeepSeek…  (Enter to send, Shift+Enter for newline)" aria-label="Message"></textarea>
+            <textarea id="chat-input" class="chat-input" rows="1" placeholder="Ask DeepSeek…" title="Enter to send · Shift+Enter for a newline" aria-label="Message"></textarea>
             <div class="compose-row">
+              <span class="think-sel" title="How much reasoning the model does before it answers">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" aria-hidden="true"><path d="M8 1.8a3.4 3.4 0 0 0-2 6.15c.5.35.8.9.8 1.5v.35h2.4v-.35c0-.6.3-1.15.8-1.5A3.4 3.4 0 0 0 8 1.8Z"/><path d="M6.6 11.9h2.8M7.2 13.7h1.6"/></svg>
+                <label class="think-label" for="think-select">Thinking</label>
+                <select id="think-select" class="think-select" aria-label="Thinking level">
+                  <option value="off">Off</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </span>
               <span class="compose-hint" id="compose-hint">Enter to send</span>
               <button class="btn btn-ghost" id="btn-add-selection" title="Attach the code you have selected (Ctrl+L)">+ Selection</button>
               <button class="btn btn-ghost" id="btn-stop" hidden>Stop</button>

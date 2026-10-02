@@ -11,10 +11,15 @@ export interface ChatMessage {
   content: string
 }
 
+/** Reasoning effort. `off` omits the field entirely, so the request is unchanged. */
+export type ReasoningEffort = 'off' | 'low' | 'medium' | 'high'
+
 export interface StreamOptions {
   apiKey: string
   model?: string
   temperature?: number
+  /** How much reasoning the model should do before answering. */
+  reasoning?: ReasoningEffort
   signal?: AbortSignal
   onDelta: (chunk: string) => void
   onReasoning?: (chunk: string) => void
@@ -59,10 +64,26 @@ function describe(status: number, body: string): string {
 export async function streamChat(messages: ChatMessage[], opts: StreamOptions): Promise<void> {
   // 0.2 is the app's fixed sampling temperature: the Settings view deliberately
   // exposes no control for it, so this default is the single source of truth.
-  const { apiKey, model = DEFAULT_MODEL, temperature = 0.2, signal, onDelta, onReasoning } = opts
+  const {
+    apiKey,
+    model = DEFAULT_MODEL,
+    temperature = 0.2,
+    reasoning = 'off',
+    signal,
+    onDelta,
+    onReasoning,
+  } = opts
 
   if (!apiKey) {
     throw new ApiError(401, 'No API key configured.')
+  }
+
+  // OpenRouter's unified reasoning knob. 'off' adds nothing at all, so the
+  // default request shape is exactly what it was before this existed.
+  const body: Record<string, unknown> = { model, messages, temperature, stream: true }
+  if (reasoning !== 'off') {
+    body.reasoning = { effort: reasoning }
+    body.include_reasoning = true
   }
 
   const res = await fetch(ENDPOINT, {
@@ -73,12 +94,7 @@ export async function streamChat(messages: ChatMessage[], opts: StreamOptions): 
       'HTTP-Referer': location.origin,
       'X-Title': 'CodeChat',
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature,
-      stream: true,
-    }),
+    body: JSON.stringify(body),
     signal,
   })
 

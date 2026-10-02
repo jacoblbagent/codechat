@@ -1,4 +1,11 @@
-import { ApiError, DEFAULT_MODEL, shortModelName, streamChat, type ChatMessage } from './deepseek'
+import {
+  ApiError,
+  DEFAULT_MODEL,
+  shortModelName,
+  streamChat,
+  type ChatMessage,
+  type ReasoningEffort,
+} from './deepseek'
 import { renderMarkdown } from './markdown'
 
 export type ChatStatus = 'idle' | 'ready' | 'busy' | 'error'
@@ -15,6 +22,7 @@ export interface ChatContext {
 export interface ChatConfig {
   apiKey: string
   model: string
+  reasoning: ReasoningEffort
 }
 
 export interface ChatDeps {
@@ -58,6 +66,37 @@ interface Turn {
   bodyEl?: HTMLElement
   /** Set once the stream has finished, so late rAF renders can't strip the footer. */
   done?: boolean
+  /** Reasoning streamed before the answer, when the model emitted any. */
+  reasoning?: string
+  /** Whether the reasoning panel is expanded; unset follows the streaming state. */
+  thinkOpen?: boolean
+  /** Bounds of the thinking phase, for the "Thought for 2.1s" label. */
+  thinkStart?: number
+  thinkEnd?: number
+}
+
+/** One source feeding the next request, with its exact size. */
+interface CtxSegment {
+  kind: 'file' | 'selection' | 'pinned'
+  label: string
+  chars: number
+  truncated?: boolean
+}
+
+/**
+ * "Thinking…" while it streams, then how long it took — falling back to the
+ * reasoning's size when the phase was too short to be worth timing (which also
+ * happens when every chunk arrives in the same tick).
+ */
+function thinkLabel(turn: Turn, chars: number, streaming: boolean): string {
+  if (streaming || !turn.thinkEnd) return 'Thinking…'
+  const ms = turn.thinkStart ? turn.thinkEnd - turn.thinkStart : 0
+  return ms >= 100 ? `Thought for ${(ms / 1000).toFixed(1)}s` : `Thought · ${chars.toLocaleString()} chars`
+}
+
+function fmtChars(n: number): string {
+  if (n < 1000) return String(n)
+  return `${(n / 1000).toFixed(n < 10000 ? 1 : 0)}k`
 }
 
 export class ChatPanel {
@@ -84,6 +123,8 @@ export class ChatPanel {
     model: HTMLElement
     pin: HTMLElement
     pinLabel: HTMLElement
+    vizBar: HTMLElement
+    vizLegend: HTMLElement
   }
 
   constructor(deps: ChatDeps) {
@@ -104,9 +145,12 @@ export class ChatPanel {
       model: q('chat-model'),
       pin: q('ctx-pin'),
       pinLabel: q('ctx-pin-label'),
+      vizBar: q('ctx-viz-bar'),
+      vizLegend: q('ctx-viz-legend'),
     }
     this.wire()
     this.refreshModelBadge()
+    this.refreshContextViz()
   }
 
   /* ── wiring ───────────────────────────────────────────────── */
@@ -133,6 +177,10 @@ export class ChatPanel {
 
     this.el.messages.addEventListener('click', (e) => this.onMessageClick(e))
 
+    for (const box of [this.el.include, this.el.selection]) {
+      box.addEventListener('change', () => this.refreshContextViz())
+    }
+
     for (const chip of document.querySelectorAll<HTMLElement>('.chip[data-prompt]')) {
       chip.addEventListener('click', () => {
         this.el.input.value = chip.dataset.prompt ?? ''
@@ -142,6 +190,18 @@ export class ChatPanel {
   }
 
   private onMessageClick(e: Event): void {
+    // Reasoning panel: flip it and re-render. The open state is read back off
+    // the DOM, so there is only ever one source of truth for what is expanded.
+    const thinkBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-think]')
+    if (thinkBtn) {
+      const turn = this.turns[Number(thinkBtn.dataset.think)]
+      if (turn) {
+        turn.thinkOpen = !thinkBtn.closest('.think')?.classList.contains('is-open')
+        this.renderTurn(turn)
+      }
+      return
+    }
+
     const target = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')
     if (!target) {
       const retry = (e.target as HTMLElement).closest<HTMLElement>('[data-retry]')
@@ -193,6 +253,7 @@ export class ChatPanel {
     this.el.ctxFile.textContent = path ? path.split('/').pop()! : 'no file'
     this.el.ctxFile.title = path ?? ''
     this.syncApplyButtons()
+    this.refreshContextViz()
   }
 
   /**
@@ -236,10 +297,12 @@ export class ChatPanel {
   private renderPin(): void {
     const p = this.pinned
     this.el.pin.classList.toggle('is-hidden', !p)
-    if (!p) return
-    const lineCount = p.code.split('\n').length
-    this.el.pinLabel.textContent = `${p.where} · ${lineCount} line${lineCount === 1 ? '' : 's'}`
-    this.el.pinLabel.title = p.code
+    if (p) {
+      const lineCount = p.code.split('\n').length
+      this.el.pinLabel.textContent = `${p.where} · ${lineCount} line${lineCount === 1 ? '' : 's'}`
+      this.el.pinLabel.title = p.code
+    }
+    this.refreshContextViz()
   }
 
   private clearPin(): void {
@@ -266,19 +329,27 @@ export class ChatPanel {
         : expanded[1]
       : text
 
+    return [instruction, ...this.contextPayload().blocks].join('\n')
+  }
+
+  /**
+   * The context blocks that ride along with the next message, plus a description
+   * of each. Built in ONE place, so the meter under the chat can never disagree
+   * with what actually goes over the wire.
+   */
+  private contextPayload(): { blocks: string[]; segs: CtxSegment[]; truncated: boolean } {
     const ctx = this.deps.getContext()
     const lang = ctx.language || 'plaintext'
-    const parts = [instruction]
+    const blocks: string[] = []
+    const segs: CtxSegment[] = []
 
     if (this.el.include.checked && ctx.path) {
-      let content = ctx.content
-      let truncated = false
-      if (content.length > MAX_CONTEXT_CHARS) {
-        content = content.slice(0, MAX_CONTEXT_CHARS)
-        truncated = true
-      }
-      parts.push('', '---', `Active file: \`${ctx.path}\` (${lang})`, '```' + lang, content, '```')
-      if (truncated) parts.push(`\n(Note: the file was truncated to ${MAX_CONTEXT_CHARS} characters.)`)
+      const full = ctx.content
+      const truncated = full.length > MAX_CONTEXT_CHARS
+      const content = truncated ? full.slice(0, MAX_CONTEXT_CHARS) : full
+      blocks.push('', '---', `Active file: \`${ctx.path}\` (${lang})`, '```' + lang, content, '```')
+      if (truncated) blocks.push(`\n(Note: the file was truncated to ${MAX_CONTEXT_CHARS} characters.)`)
+      segs.push({ kind: 'file', label: ctx.path.split('/').pop()!, chars: content.length, truncated })
     }
 
     // A chunk pinned with Ctrl+L, or the live selection when its box is ticked.
@@ -287,10 +358,64 @@ export class ChatPanel {
     const code = pinned ? pinned.code : this.el.selection.checked ? ctx.selection.trim() : ''
     if (code) {
       const label = pinned ? `Selected code from \`${pinned.where}\`` : 'Selected text'
-      parts.push('', `${label}:`, '```' + (pinned?.language || lang), code, '```')
+      blocks.push('', `${label}:`, '```' + (pinned?.language || lang), code, '```')
+      segs.push({
+        kind: pinned ? 'pinned' : 'selection',
+        label: pinned ? pinned.where : `${code.split('\n').length} lines`,
+        chars: code.length,
+      })
     }
 
-    return parts.length === 1 ? instruction : parts.join('\n')
+    return { blocks, segs, truncated: segs.some((s) => s.truncated) }
+  }
+
+  /** Redraw the meter showing what the next message will carry. */
+  refreshContextViz(): void {
+    const { segs, truncated } = this.contextPayload()
+    const total = segs.reduce((n, s) => n + s.chars, 0)
+
+    // Composition bar: segments are proportional to the total, so a small
+    // selection stays visible next to a whole file.
+    this.el.vizBar.replaceChildren()
+    if (total > 0) {
+      for (const s of segs) {
+        const span = document.createElement('span')
+        span.className = `ctx-seg kind-${s.kind}`
+        span.style.width = `${(s.chars / total) * 100}%`
+        this.el.vizBar.appendChild(span)
+      }
+    }
+
+    this.el.vizLegend.replaceChildren()
+    if (!segs.length) {
+      const empty = document.createElement('span')
+      empty.textContent = 'No context attached — tick include, or select code'
+      this.el.vizLegend.appendChild(empty)
+      return
+    }
+
+    for (const s of segs) {
+      const chip = document.createElement('span')
+      chip.className = `ctx-chip kind-${s.kind}`
+      const name = document.createElement('b')
+      name.textContent = s.label
+      chip.append(name, document.createTextNode(` ${fmtChars(s.chars)}`))
+      chip.title = `${s.label} — ${s.chars.toLocaleString()} characters`
+      this.el.vizLegend.appendChild(chip)
+    }
+
+    if (truncated) {
+      const warn = document.createElement('span')
+      warn.className = 'ctx-chip is-warn'
+      warn.textContent = `file cut at ${fmtChars(MAX_CONTEXT_CHARS)}`
+      warn.title = `The whole-file block is capped at ${MAX_CONTEXT_CHARS.toLocaleString()} characters`
+      this.el.vizLegend.appendChild(warn)
+    }
+
+    const totalEl = document.createElement('span')
+    totalEl.className = 'ctx-viz-total'
+    totalEl.textContent = `${fmtChars(total)} chars`
+    this.el.vizLegend.appendChild(totalEl)
   }
 
   async send(preset?: string): Promise<void> {
@@ -338,10 +463,19 @@ export class ChatPanel {
       await streamChat(history, {
         apiKey,
         model: this.deps.getConfig().model,
+        reasoning: this.deps.getConfig().reasoning,
         signal: this.controller.signal,
         onDelta: (chunk) => {
+          // The first answer token closes out the thinking phase.
+          if (assistant.thinkStart && !assistant.thinkEnd) assistant.thinkEnd = Date.now()
           buffer += chunk
           assistant.content = buffer
+          this.scheduleRender(assistant)
+          this.scrollIfNearBottom()
+        },
+        onReasoning: (chunk) => {
+          if (!assistant.thinkStart) assistant.thinkStart = Date.now()
+          assistant.reasoning = (assistant.reasoning ?? '') + chunk
           this.scheduleRender(assistant)
           this.scrollIfNearBottom()
         },
@@ -445,12 +579,45 @@ export class ChatPanel {
     turn.bodyEl.classList.toggle('cursor-blink', assistantStreaming && !turn.content)
     const { html } = renderMarkdown(turn.content)
     turn.bodyEl.innerHTML = html
+
+    // Reasoning comes first when the model emitted any: expanded while it is the
+    // only thing to read, collapsed once the answer takes over.
+    const reasoning = (turn.reasoning ?? '').trim()
+    if (reasoning) {
+      const open = turn.thinkOpen ?? (assistantStreaming && !turn.content.trim())
+      turn.bodyEl.prepend(this.buildThinkBlock(turn, reasoning, open))
+    }
+
     if (!assistantStreaming && turn.content.trim()) {
       const footer = document.createElement('div')
       footer.className = 'msg-actions'
       footer.innerHTML = '<button class="cb-btn" data-retry="1">Regenerate</button>'
       turn.bodyEl.appendChild(footer)
     }
+  }
+
+  /** The collapsible "Thinking…" panel. The text arrives via textContent — it is model output. */
+  private buildThinkBlock(turn: Turn, reasoning: string, open: boolean): HTMLElement {
+    const box = document.createElement('div')
+    box.className = `think${open ? ' is-open' : ''}`
+
+    const head = document.createElement('button')
+    head.type = 'button'
+    head.className = 'think-head'
+    head.dataset.think = String(this.turns.indexOf(turn))
+    head.setAttribute('aria-expanded', String(open))
+    head.innerHTML =
+      '<svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>'
+    const label = document.createElement('span')
+    label.textContent = thinkLabel(turn, reasoning.length, !turn.done)
+    head.appendChild(label)
+
+    const body = document.createElement('div')
+    body.className = 'think-body'
+    body.textContent = reasoning
+
+    box.append(head, body)
+    return box
   }
 
   private scheduleRender(turn: Turn): void {

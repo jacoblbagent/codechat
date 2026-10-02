@@ -24,6 +24,14 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   - **New file** from a code block,
   - highlight code and press `Ctrl+L` (or **+ Selection**) to attach that exact
     chunk as pinned context for your next message,
+  - watch the **context meter** under the messages: a segmented bar and legend
+    showing every source going into the next request (file, selection, pinned
+    chunk) with its exact size and the running total, so you can see what the
+    model is actually being told before you hit send,
+  - pick a **thinking level** (Off / Low / Medium / High) next to the composer,
+    sent to OpenRouter as a reasoning effort; the reasoning it produces streams
+    into a collapsible panel above the answer. Left at **Off**, no reasoning
+    fields are sent at all,
   - run slash commands: `/explain`, `/fix`, `/tests`, `/refactor`, `/docs`.
 - **Syntax diagnostics** in the status bar for open files (semantic analysis is off — a
   browser tab has no `node_modules`).
