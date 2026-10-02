@@ -24,6 +24,11 @@ export interface SettingsUiDeps {
    * — it is the same model picker the chat panel uses.
    */
   liveSelect?: (def: SettingDef, host: HTMLElement, label: HTMLLabelElement) => () => void
+  /**
+   * Mount a read-only row (see `SettingDef.infoSource`). Returns a function that
+   * redraws it — called on every `refresh()`, so it must not fetch.
+   */
+  liveInfo?: (def: SettingDef, host: HTMLElement, label: HTMLLabelElement) => () => void
 }
 
 const SCOPE_HEAD: Record<string, { title: string; note: string }> = {
@@ -129,12 +134,13 @@ export class SettingsPage {
   }
 
   private buildRow(def: SettingDef): { row: HTMLElement; sync: () => void } {
+    const info = def.type === 'info'
     const row = document.createElement('div')
-    row.className = 'sp-row'
+    row.className = info ? 'sp-row is-info' : 'sp-row'
     row.dataset.setting = def.id
 
-    const info = document.createElement('div')
-    info.className = 'sp-info'
+    const info_ = document.createElement('div')
+    info_.className = 'sp-info'
 
     const label = document.createElement('label')
     label.className = 'sp-label'
@@ -149,24 +155,29 @@ export class SettingsPage {
     desc.className = 'sp-desc'
     desc.textContent = def.description
 
-    info.append(label, id, desc)
+    info_.append(label, id, desc)
 
     const control = document.createElement('div')
     control.className = 'sp-control'
     const sync = this.buildControl(def, control, label)
 
-    const reset = document.createElement('button')
-    reset.type = 'button'
-    reset.className = 'sp-reset'
-    reset.title = `Reset ${def.label} to its default`
-    reset.setAttribute('aria-label', `Reset ${def.label}`)
-    reset.textContent = '↺'
-    reset.addEventListener('click', () => {
-      this.deps.reset(def)
-      this.refresh()
-    })
+    row.append(info_, control)
 
-    row.append(info, control, reset)
+    // A read-only row reports a value; there is nothing to reset.
+    if (!info) {
+      const reset = document.createElement('button')
+      reset.type = 'button'
+      reset.className = 'sp-reset'
+      reset.title = `Reset ${def.label} to its default`
+      reset.setAttribute('aria-label', `Reset ${def.label}`)
+      reset.textContent = '↺'
+      reset.addEventListener('click', () => {
+        this.deps.reset(def)
+        this.refresh()
+      })
+      row.appendChild(reset)
+    }
+
     sync()
     return { row, sync }
   }
@@ -179,6 +190,17 @@ export class SettingsPage {
     const markModified = (): void => {
       const row = host.closest<HTMLElement>('.sp-row')
       row?.classList.toggle('is-modified', this.deps.isModified(def))
+    }
+
+    if (def.type === 'info' && this.deps.liveInfo) {
+      // It reports a value rather than holding one, so the label must not
+      // claim a form control that does not exist.
+      label.removeAttribute('for')
+      const syncLive = this.deps.liveInfo(def, host, label)
+      return () => {
+        syncLive()
+        markModified()
+      }
     }
 
     if (def.type === 'boolean') {

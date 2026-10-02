@@ -13,6 +13,7 @@ import {
   type ThemeName,
   uriFor,
 } from './monaco'
+import { CreditsRow } from './credits-ui'
 import { ModelPicker } from './model-picker'
 import { buildMonacoOptions, defaultCore, settingById, type SettingDef } from './settings'
 import { SettingsPage } from './settings-ui'
@@ -924,11 +925,18 @@ function createFileFromCode(code: string, lang: string): void {
   }
 }
 
+/* The credits row is built with the settings page (via its `liveInfo` hook) and
+   loaded when the page opens, so nothing is asked of OpenRouter at boot. */
+let creditsRow: CreditsRow | null = null
+
 /** The gear opens the settings page in the editor area, like VS Code. */
 function openSettings(): void {
   settingsPage.open()
   settingsPage.refresh()
   syncSettingsButton()
+  // The balance is the one thing on the page that has to be asked for; it is
+  // loaded when the page opens rather than at boot, and cached for a minute.
+  void creditsRow?.load()
 }
 
 function closeSettings(): void {
@@ -1442,6 +1450,8 @@ function getSetting(def: SettingDef): unknown {
 }
 
 function isSettingModified(def: SettingDef): boolean {
+  // A read-only row has no value to differ from a default.
+  if (def.type === 'info') return false
   const value = getSetting(def)
   if (typeof def.default === 'number') return Number(value) !== def.default
   return value !== def.default
@@ -1478,6 +1488,8 @@ function applySetting(def: SettingDef): void {
   switch (def.id) {
     case 'codechat.apiKey':
       setChatStatus(settings.apiKey ? 'ready' : 'idle')
+      // New key, new account — the cached balance is no longer ours.
+      void creditsRow?.keyChanged()
       break
     case 'codechat.model':
       chat.refreshModelBadge()
@@ -1560,6 +1572,13 @@ const settingsPage = new SettingsPage({
       text.textContent = settings.model
       btn.title = settings.model
     }
+  },
+  // A read-only row: the page hands over a slot and we mount the credits block.
+  liveInfo: (_def, host) => {
+    creditsRow = new CreditsRow({ getKey: () => settings.apiKey })
+    host.appendChild(creditsRow.element)
+    // Redraw only — `load()` is what fetches, and the page calls it on open.
+    return () => creditsRow?.sync()
   },
 })
 

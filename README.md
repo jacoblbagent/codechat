@@ -18,7 +18,11 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   Indentation / Display / Minimap / Scrolling / Suggestions / Editing, plus Workbench and
   Files) and **CodeChat**, for the settings this app adds on top. Every control applies
   immediately, sits behind a search box that matches names, ids and descriptions, and shows
-  a coloured gutter plus a reset arrow when it differs from the default.
+  a coloured gutter plus a reset arrow when it differs from the default. The CodeChat
+  section also carries a read-only **Credits** row: your remaining balance, what this key
+  has spent, today's and this month's usage, and a Refresh button. It is fetched when the
+  page opens (cached for a minute), never at boot, and the request goes to OpenRouter with
+  the same key the chat uses — nowhere else.
 - **Real files** — *Open Folder* loads a directory from your machine via the File System
   Access API (Chrome/Edge) and `Ctrl+S` writes changes back to disk. Browsers without the
   picker fall back to `<input type="file">` / drag-and-drop, and an in-memory demo
@@ -132,6 +136,8 @@ index.html          full IDE shell (title bar → status bar)
 src/main.ts         app wiring: tabs, tree, commands, settings, layout
 src/chat.ts         chat panel: sessions, streaming, markdown rendering, code actions
 src/deepseek.ts     OpenRouter client (SSE) + the request shape
+src/credits.ts      OpenRouter balance: /api/v1/key + /api/v1/credits, cached
+src/credits-ui.ts   the read-only Credits row in Settings
 src/models.ts       the OpenRouter catalogue: fetch, cache, search, formatting
 src/model-picker.ts the searchable model picker (chat header + Settings)
 src/settings.ts     settings catalogue (VS Code core + CodeChat)
@@ -151,6 +157,12 @@ src/styles.css      One Dark Pro inspired styling
   and file-picker fallbacks.
 - No terminal and no extension host. Syntax highlighting covers ~30 languages; only
   JSON/CSS/HTML/TS/JS get language-service features (completion, hover, syntax errors).
+- **The Credits row shows what the key is allowed to see.** `GET /api/v1/key` works with any
+  key and reports that key's own limit, remaining and usage. The *account* balance comes from
+  `GET /api/v1/credits`, which OpenRouter restricts to provisioning keys — with an ordinary
+  key the row says so and falls back to the key's own numbers. It deliberately does not ask
+  for the account balance unless the key is allowed to, because a rejected response would sit
+  in the browser console.
 - Chat sessions live in `localStorage`, so they are per-browser and cleared with site
   data. The last 20 are kept and each transcript is capped at its 60 most recent
   turns; if the origin is over quota the app falls back to saving only the session

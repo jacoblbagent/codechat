@@ -28,7 +28,7 @@ export interface SettingDef {
   id: string
   label: string
   description: string
-  type: 'boolean' | 'number' | 'select' | 'text' | 'password'
+  type: 'boolean' | 'number' | 'select' | 'text' | 'password' | 'info'
   default: string | number | boolean
   options?: SelectOption[]
   min?: number
@@ -47,6 +47,12 @@ export interface SettingDef {
    * `SettingsUiDeps.liveSelect`); without one the row degrades to a text field.
    */
   optionsSource?: 'openrouter-models'
+  /**
+   * A read-only row that reports something rather than setting it. The host
+   * mounts whatever it wants for this key (see `SettingsUiDeps.liveInfo`); the
+   * row gets no reset arrow and is never "modified".
+   */
+  infoSource?: 'openrouter-credits'
   /** Password fields get a Clear button. */
   clearable?: boolean
   /** Long single-line values (a font stack) get a wider field. */
@@ -407,6 +413,9 @@ export const SETTING_GROUPS: SettingGroup[] = [
       s('codechat.apiKey', 'OpenRouter API key',
         'Kept in this browser only — never bundled or committed.',
         'password', '', { placeholder: 'sk-or-v1-…', clearable: true }),
+      s('codechat.credits', 'Credits',
+        'What your OpenRouter account has left, read with the key above.',
+        'info', '', { infoSource: 'openrouter-credits' }),
       sel('codechat.model', 'Model',
         'The model the chat panel talks to. The list is every model OpenRouter currently offers.',
         'deepseek/deepseek-v4.1-flash', [],

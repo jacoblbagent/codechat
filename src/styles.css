@@ -453,6 +453,43 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .sp-num:focus, .sp-text:focus, .sp-select:focus { border-color: var(--blue); outline: none; }
 .sp-clear { height: 24px; padding: 0 9px; font-size: 11px; }
 
+/* ── Credits: a read-only row ───────────────────────────────── */
+/* It reports a value rather than holding one, so its control takes the full
+   row width under the description instead of competing for the right edge. */
+.sp-row.is-info { flex-wrap: wrap; }
+.sp-row.is-info .sp-control { flex: 1 1 100%; margin-top: 7px; }
+.credits {
+  flex: 1 1 auto; min-width: 0; padding: 7px 9px;
+  border: 1px solid var(--border-soft); border-radius: 4px;
+  background: var(--bg-input);
+}
+.credits-top { display: flex; align-items: baseline; gap: 7px; }
+.credits-amount { font-size: 17px; font-weight: 600; color: var(--fg-bright); }
+.credits-amount.is-negative { color: var(--red); }
+.credits-suffix { font-size: 11.5px; color: var(--fg-dim); }
+.credits-chip {
+  font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 1px 5px; border-radius: 8px;
+  color: var(--blue); border: 1px solid var(--blue);
+}
+.credits-refresh {
+  margin-left: auto; flex: none; padding: 1px 7px; border-radius: 3px;
+  border: 1px solid var(--border-strong); background: var(--bg-btn);
+  color: var(--fg); font-size: 11px; cursor: pointer;
+}
+.credits-refresh:hover { background: var(--bg-btn-hover); color: var(--fg-bright); }
+.credits-meta { margin-top: 3px; font-size: 11.5px; color: var(--fg); }
+.credits-note { margin-top: 3px; font-size: 11px; line-height: 1.45; color: var(--fg-dim); }
+.credits-note.is-warn { color: var(--yellow); }
+.credits-foot {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--border-soft);
+  font: 10.5px var(--mono); color: var(--fg-dim);
+}
+.credits-when { flex: none; }
+.credits-error { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--red); }
+.credits-error > span { flex: 1 1 auto; min-width: 0; }
+
 /* The `codechat.model` control: a button that opens the model picker. */
 .sp-model-btn {
   display: inline-flex; align-items: center; gap: 6px; max-width: 240px;
