@@ -8,6 +8,8 @@ export interface ChatContext {
   language: string
   content: string
   selection: string
+  /** 1-based line range of `selection`, when there is one. */
+  selectionLines: { start: number; end: number } | null
 }
 
 export interface ChatConfig {
@@ -64,6 +66,8 @@ export class ChatPanel {
   private controller: AbortController | null = null
   private streaming = false
   private rafPending = false
+  /** A chunk of code attached with Ctrl+L, sent with the next message. */
+  private pinned: { code: string; language: string; where: string } | null = null
 
   private el: {
     panel: HTMLElement
@@ -78,6 +82,8 @@ export class ChatPanel {
     include: HTMLInputElement
     selection: HTMLInputElement
     model: HTMLElement
+    pin: HTMLElement
+    pinLabel: HTMLElement
   }
 
   constructor(deps: ChatDeps) {
@@ -96,6 +102,8 @@ export class ChatPanel {
       include: q('ctx-include') as HTMLInputElement,
       selection: q('ctx-selection') as HTMLInputElement,
       model: q('chat-model'),
+      pin: q('ctx-pin'),
+      pinLabel: q('ctx-pin-label'),
     }
     this.wire()
     this.refreshModelBadge()
@@ -120,6 +128,8 @@ export class ChatPanel {
     })
 
     document.getElementById('btn-new-chat')?.addEventListener('click', () => this.newChat())
+    document.getElementById('btn-add-selection')?.addEventListener('click', () => this.addSelectionToChat())
+    document.getElementById('ctx-pin-clear')?.addEventListener('click', () => this.clearPin())
 
     this.el.messages.addEventListener('click', (e) => this.onMessageClick(e))
 
@@ -182,8 +192,45 @@ export class ChatPanel {
     this.el.ctxFile.title = path ?? ''
   }
 
+  /**
+   * Attach the editor's current selection to the next message (Ctrl+L).
+   * Returns false when nothing is selected, so callers can skip revealing the
+   * panel for a no-op.
+   */
+  addSelectionToChat(): boolean {
+    const ctx = this.deps.getContext()
+    const code = ctx.selection.trim()
+    if (!code) {
+      this.deps.toast('Select some code in the editor first', 'err')
+      return false
+    }
+    const lines = ctx.selectionLines
+    const where = `${ctx.path ?? 'editor'}${
+      lines ? `:${lines.start}${lines.end !== lines.start ? `-${lines.end}` : ''}` : ''
+    }`
+    this.pinned = { code, language: ctx.language || 'plaintext', where }
+    this.renderPin()
+    this.el.input.focus()
+    return true
+  }
+
+  private renderPin(): void {
+    const p = this.pinned
+    this.el.pin.classList.toggle('is-hidden', !p)
+    if (!p) return
+    const lineCount = p.code.split('\n').length
+    this.el.pinLabel.textContent = `${p.where} · ${lineCount} line${lineCount === 1 ? '' : 's'}`
+    this.el.pinLabel.title = p.code
+  }
+
+  private clearPin(): void {
+    this.pinned = null
+    this.renderPin()
+  }
+
   newChat(): void {
     if (this.streaming) this.stop()
+    this.clearPin()
     this.turns = []
     this.el.messages.innerHTML = ''
     this.el.empty.classList.remove('is-hidden')
@@ -201,32 +248,30 @@ export class ChatPanel {
       : text
 
     const ctx = this.deps.getContext()
-    const includeFile = this.el.include.checked
-    const includeSel = this.el.selection.checked
+    const lang = ctx.language || 'plaintext'
+    const parts = [instruction]
 
-    if (!includeFile || !ctx.path) return instruction
-
-    let content = ctx.content
-    let truncated = false
-    if (content.length > MAX_CONTEXT_CHARS) {
-      content = content.slice(0, MAX_CONTEXT_CHARS)
-      truncated = true
+    if (this.el.include.checked && ctx.path) {
+      let content = ctx.content
+      let truncated = false
+      if (content.length > MAX_CONTEXT_CHARS) {
+        content = content.slice(0, MAX_CONTEXT_CHARS)
+        truncated = true
+      }
+      parts.push('', '---', `Active file: \`${ctx.path}\` (${lang})`, '```' + lang, content, '```')
+      if (truncated) parts.push(`\n(Note: the file was truncated to ${MAX_CONTEXT_CHARS} characters.)`)
     }
 
-    const parts = [
-      instruction,
-      '',
-      '---',
-      `Active file: \`${ctx.path}\` (${ctx.language})`,
-      '```' + ctx.language,
-      content,
-      '```',
-    ]
-    if (truncated) parts.push(`\n(Note: the file was truncated to ${MAX_CONTEXT_CHARS} characters.)`)
-    if (includeSel && ctx.selection.trim()) {
-      parts.push('', 'Selected text:', '```' + ctx.language, ctx.selection.trim(), '```')
+    // A chunk pinned with Ctrl+L, or the live selection when its box is ticked.
+    // Either can be sent on its own, with the whole-file block turned off.
+    const pinned = this.pinned
+    const code = pinned ? pinned.code : this.el.selection.checked ? ctx.selection.trim() : ''
+    if (code) {
+      const label = pinned ? `Selected code from \`${pinned.where}\`` : 'Selected text'
+      parts.push('', `${label}:`, '```' + (pinned?.language || lang), code, '```')
     }
-    return parts.join('\n')
+
+    return parts.length === 1 ? instruction : parts.join('\n')
   }
 
   async send(preset?: string): Promise<void> {
@@ -242,6 +287,7 @@ export class ChatPanel {
     }
 
     const wireContent = this.buildUserContent(text)
+    this.clearPin() // the attachment is consumed by the message it rode along with
     this.el.input.value = ''
     this.autoGrow()
     this.el.empty.classList.add('is-hidden')

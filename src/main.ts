@@ -169,6 +169,18 @@ const editor = monaco.editor.create(els.editorHost, {
   value: '',
 })
 
+// Ctrl+L with code highlighted: attach that chunk to the chat as context.
+// Bound on the editor so it fires with focus inside Monaco, and so it wins over
+// the editor's own Ctrl+L (expandLineSelection) and Ctrl+Shift+L
+// (selectHighlights). Ctrl+Shift+L is the fallback for when the browser claims
+// Ctrl+L for its address bar — it is the one chord no mainstream browser wants.
+for (const chord of [
+  monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyL,
+  monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyL,
+]) {
+  editor.addCommand(chord, () => attachSelectionToChat())
+}
+
 // A browser IDE has no node_modules or tsconfig, so semantic checks would
 // report phantom errors ("cannot find name 'console'"). Syntax validation stays
 // on — it still flags real mistakes — and suggestion diagnostics are off so the
@@ -562,6 +574,10 @@ function chatContext() {
     language: path ? languageFor(path) : 'plaintext',
     content: file?.content ?? model?.getValue() ?? '',
     selection: model && sel && !sel.isEmpty() ? model.getValueInRange(sel) : '',
+    selectionLines:
+      model && sel && !sel.isEmpty()
+        ? { start: sel.startLineNumber, end: sel.endLineNumber }
+        : null,
   }
 }
 
@@ -944,8 +960,25 @@ for (const btn of document.querySelectorAll<HTMLElement>('[data-command]')) {
   btn.addEventListener('click', () => commands[btn.dataset.command!]?.())
 }
 
+/** Attach the editor selection to the chat, revealing the panel if needed. */
+function attachSelectionToChat(): void {
+  if (!chat.addSelectionToChat()) return
+  if (isNarrow()) setChatOpen(true)
+  else if (ui.chatCollapsed) setChatCollapsed(false)
+}
+
 window.addEventListener('keydown', (e) => {
   const mod = e.ctrlKey || e.metaKey
+
+  // Ctrl+L attaches the highlighted chunk. Ctrl+Shift+L works too (browsers
+  // don't reserve it) for when Ctrl+L is taken by the address bar. Monaco
+  // handles the editor case, so skip if it already did.
+  if (mod && !e.altKey && e.key.toLowerCase() === 'l') {
+    if (e.defaultPrevented) return
+    e.preventDefault()
+    attachSelectionToChat()
+    return
+  }
 
   if (mod && e.altKey && e.key.toLowerCase() === 'c') {
     e.preventDefault()

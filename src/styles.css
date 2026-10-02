@@ -490,6 +490,25 @@ kbd {
 .ctx-toggle { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .ctx-toggle input { accent-color: var(--blue-btn); margin: 0; }
 
+/* A chunk of code attached with Ctrl+L, waiting to ride along with the next message. */
+.ctx-pin {
+  display: flex; align-items: center; gap: 6px;
+  margin: 8px 10px 0; padding: 5px 8px;
+  background: var(--bg-code-inline); border: 1px solid var(--border-soft);
+  border-left: 2px solid var(--blue); border-radius: 4px;
+  font-size: 11px; color: var(--fg-dim); flex: none;
+}
+.ctx-pin svg { flex: none; color: var(--blue); }
+.ctx-pin-label {
+  font-family: var(--mono); color: var(--fg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ctx-pin-x {
+  margin-left: auto; padding: 0 2px; background: none; border: none;
+  color: var(--fg-dim); font-size: 14px; line-height: 1; cursor: pointer;
+}
+.ctx-pin-x:hover { color: var(--fg-bright); }
+
 .chat-compose { border-top: 1px solid var(--border); padding: 8px 10px 10px; flex: none; }
 .chat-input {
   width: 100%; max-height: 180px; min-height: 34px; resize: none;

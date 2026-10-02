@@ -19,6 +19,8 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   - send the **active file** and your **current selection** as context (per-request toggles),
   - **Insert** any code block it returns at the cursor or over a selection,
   - **New file** from a code block,
+  - highlight code and press `Ctrl+L` (or **+ Selection**) to attach that exact
+    chunk as pinned context for your next message,
   - run slash commands: `/explain`, `/fix`, `/tests`, `/refactor`, `/docs`.
 - **Syntax diagnostics** in the status bar for open files (semantic analysis is off — a
   browser tab has no `node_modules`).
@@ -47,6 +49,7 @@ Prefer to bake one in for local use? Copy `.env.example` to `.env.local` and set
 |---|---|
 | `Ctrl+Alt+C` | Toggle the AI chat panel |
 | `Ctrl+Alt+T` | Toggle One Dark Pro light / dark |
+| `Ctrl+L` | Attach the selected code to the chat (`Ctrl+Shift+L` also works) |
 | `Ctrl+P` | Quick open a file |
 | `Ctrl+S` | Save the active file (writes to disk for real folders) |
 | `Ctrl+B` | Toggle the side bar |
