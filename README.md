@@ -9,7 +9,10 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
 ## What it does
 
 - **VS Code shell** — title bar, activity bar, explorer, tabs, status bar, command palette
-  (`Ctrl+P`), search view, minimap, bracket-pair colouring.
+  (`Ctrl+P`), search view, minimap, bracket-pair colouring. The rail buttons are
+  toggles: a button shows its view, switches to it, or — if it is the view already
+  showing — closes the side bar, leaving the button marked so you can see what
+  returns. `Ctrl+B` does the same. The gear toggles the settings page.
 - **Settings page** (`Ctrl+,`, or the gear) — opens in the editor area, the way VS Code
   opens settings in a tab. Two sections: **VS Code core settings** (Editor: Font / Cursor /
   Indentation / Display / Minimap / Scrolling / Suggestions / Editing, plus Workbench and
@@ -96,7 +99,7 @@ Prefer to bake one in for local use? Copy `.env.example` to `.env.local` and set
 | `Ctrl+L` | Attach the selected code to the chat (`Ctrl+Shift+L` also works) |
 | `Ctrl+P` | Quick open a file |
 | `Ctrl+S` | Save the active file (writes to disk for real folders) |
-| `Ctrl+B` | Toggle the side bar |
+| `Ctrl+B` | Toggle the side bar (same as clicking the active rail button) |
 | `Ctrl+Shift+K` | New chat session (a new tab) |
 | `Ctrl+,` | Open the settings page |
 | `Enter` / `Shift+Enter` | Send message / newline in the chat box |

@@ -32,6 +32,7 @@ interface Settings {
 
 interface UiState {
   chatCollapsed: boolean
+  sidebarCollapsed: boolean
   chatWidth: number
   sidebarWidth: number
   theme: ThemeName
@@ -136,6 +137,7 @@ function initialTheme(): ThemeName {
 function loadUi(): UiState {
   const fallback: UiState = {
     chatCollapsed: false,
+    sidebarCollapsed: false,
     chatWidth: 400,
     sidebarWidth: 240,
     theme: initialTheme(),
@@ -190,6 +192,7 @@ const els = {
   scmList: $('scm-list'),
   scmEmpty: $('scm-empty'),
   thinkSelect: $<HTMLSelectElement>('think-select'),
+  btnSettings: $('btn-open-settings'),
   chatDot: $('chat-dot'),
 }
 
@@ -488,7 +491,7 @@ document.getElementById('btn-scm-save-all')?.addEventListener('click', () => {
 
 function openFile(path: string, keepFocus = false): void {
   // Opening a file always leaves the settings page.
-  settingsPage.close()
+  closeSettings()
   const file = workspace.get(path)
   if (!file) {
     toast(`No such file: ${path}`, 'err')
@@ -925,6 +928,21 @@ function createFileFromCode(code: string, lang: string): void {
 function openSettings(): void {
   settingsPage.open()
   settingsPage.refresh()
+  syncSettingsButton()
+}
+
+function closeSettings(): void {
+  settingsPage.close()
+  syncSettingsButton()
+}
+
+/** The gear is a toggle too, so it has to show whether the page is up. */
+function syncSettingsButton(): void {
+  els.btnSettings.classList.toggle('is-active', settingsPage.isOpen)
+  els.btnSettings.setAttribute('aria-pressed', String(settingsPage.isOpen))
+  els.btnSettings.title = settingsPage.isOpen
+    ? 'Close settings (Esc)'
+    : 'Settings (Ctrl+,)'
 }
 
 /* ── Model selection ─────────────────────────────────────────
@@ -1054,6 +1072,22 @@ function setChatCollapsed(collapsed: boolean): void {
   relayout()
 }
 
+/**
+ * Collapse the side bar to nothing. On narrow screens the side bar is a drawer
+ * instead, so the flag is remembered but not applied — and the CSS keeps its
+ * own override there, because a `.body.sidebar-collapsed` rule would otherwise
+ * out-specify the media query's two-column grid.
+ */
+function setSidebarCollapsed(collapsed: boolean): void {
+  ui.sidebarCollapsed = collapsed
+  els.body.classList.toggle('sidebar-collapsed', collapsed && !isNarrow())
+  saveUi(ui)
+  relayout()
+}
+
+const isSidebarCollapsed = (): boolean =>
+  !isNarrow() && els.body.classList.contains('sidebar-collapsed')
+
 /** The one way to toggle the AI panel, whatever the screen size. */
 function toggleChatPanel(): void {
   if (isNarrow()) {
@@ -1091,10 +1125,14 @@ function applyUi(): void {
   setMonacoTheme(ui.theme)
   syncThemeButton()
   setChatCollapsed(ui.chatCollapsed)
+  setSidebarCollapsed(ui.sidebarCollapsed)
   syncScrim()
 }
 
-/* Activity bar */
+/* Activity bar. Clicking a view's button shows that view, switches to it, or —
+   if it is already the one showing — closes the side bar, the way VS Code does.
+   The active button stays marked while collapsed, so you can see what will come
+   back, and pressing it again re-opens the side bar. */
 for (const btn of document.querySelectorAll<HTMLElement>('.act-btn[data-view]')) {
   btn.addEventListener('click', () => {
     const view = btn.dataset.view as ViewName
@@ -1108,7 +1146,12 @@ for (const btn of document.querySelectorAll<HTMLElement>('.act-btn[data-view]'))
       setSidebarOpen(true)
       return
     }
+    if (btn.classList.contains('is-active') && !isSidebarCollapsed()) {
+      setSidebarCollapsed(true)
+      return
+    }
     setView(view)
+    setSidebarCollapsed(false)
   })
 }
 
@@ -1130,9 +1173,11 @@ els.sbAi.addEventListener('click', () => {
 
 els.scrim.addEventListener('click', closeDrawers)
 
-// Crossing the breakpoint must never leave a drawer stuck open.
+// Crossing the breakpoint must never leave a drawer stuck open, and the side
+// bar's collapsed flag only applies on desktop.
 narrow.addEventListener('change', () => {
   closeDrawers()
+  setSidebarCollapsed(ui.sidebarCollapsed)
   relayout()
 })
 
@@ -1344,8 +1389,7 @@ window.addEventListener('keydown', (e) => {
   if (mod && e.key.toLowerCase() === 'b') {
     e.preventDefault()
     if (isNarrow()) setSidebarOpen(!els.body.classList.contains('sidebar-open'))
-    else document.querySelector('.sidebar')?.classList.toggle('is-hidden')
-    editor.layout()
+    else setSidebarCollapsed(!ui.sidebarCollapsed)
     return
   }
   if (e.key === 'Escape') {
@@ -1354,7 +1398,7 @@ window.addEventListener('keydown', (e) => {
       return
     }
     if (settingsPage.isOpen) {
-      settingsPage.close()
+      closeSettings()
       return
     }
     closeDrawers()
@@ -1519,7 +1563,11 @@ const settingsPage = new SettingsPage({
   },
 })
 
-document.getElementById('btn-open-settings')?.addEventListener('click', () => openSettings())
+document.getElementById('btn-open-settings')?.addEventListener('click', () => {
+  // Same toggle rule as the view buttons: a second click closes it again.
+  if (settingsPage.isOpen) closeSettings()
+  else openSettings()
+})
 
 // The chat's thinking selector and the settings page are two views of one value,
 // so each writes through the same setter and re-syncs the other.
@@ -1546,6 +1594,7 @@ workspace.onChange(() => {
 })
 
 applyUi()
+syncSettingsButton()
 els.thinkSelect.value = settings.reasoning
 workspace.loadDemo()
 renderTree()
