@@ -18,6 +18,9 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   toggled with `Ctrl+Alt+C`, resizable by dragging its edge. The panel can:
   - send the **active file** and your **current selection** as context (per-request toggles),
   - **Insert** any code block it returns at the cursor or over a selection,
+  - **Replace file** — write a block straight into the file you have open (the
+    button names the target, e.g. `Replace greeting.ts`; undo with `Ctrl+Z`,
+    save with `Ctrl+S`),
   - **New file** from a code block,
   - highlight code and press `Ctrl+L` (or **+ Selection**) to attach that exact
     chunk as pinned context for your next message,

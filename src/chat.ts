@@ -22,6 +22,7 @@ export interface ChatDeps {
   getContext: () => ChatContext
   getConfig: () => ChatConfig
   insertCode: (code: string) => void
+  applyToActiveFile: (code: string) => void
   createFileFromCode: (code: string, lang: string) => void
   toast: (message: string, kind?: 'ok' | 'err') => void
   openSettings: () => void
@@ -171,6 +172,8 @@ export class ChatPanel {
       )
     } else if (act === 'insert') {
       this.deps.insertCode(code)
+    } else if (act === 'apply') {
+      this.deps.applyToActiveFile(code)
     } else if (act === 'file') {
       this.deps.createFileFromCode(code, lang)
     }
@@ -190,6 +193,23 @@ export class ChatPanel {
   setActiveFile(path: string | null): void {
     this.el.ctxFile.textContent = path ? path.split('/').pop()! : 'no file'
     this.el.ctxFile.title = path ?? ''
+    this.syncApplyButtons()
+  }
+
+  /**
+   * Point every "Replace …" code-block button at whichever file is open *now*,
+   * so it is always obvious which file a click would overwrite.
+   */
+  private syncApplyButtons(): void {
+    const path = this.deps.getContext().path
+    const name = path ? path.split('/').pop()! : ''
+    for (const btn of this.el.messages.querySelectorAll<HTMLButtonElement>('[data-act="apply"]')) {
+      btn.textContent = name ? `Replace ${name}` : 'Replace file'
+      btn.title = path
+        ? `Replace the whole contents of ${path} with this block`
+        : 'Open a file first'
+      btn.disabled = !path
+    }
   }
 
   /**
@@ -448,6 +468,7 @@ export class ChatPanel {
   private finalize(turn: Turn): void {
     turn.done = true
     this.renderTurn(turn)
+    this.syncApplyButtons()
   }
 
   private pushSystem(text: string): void {

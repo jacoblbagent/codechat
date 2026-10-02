@@ -76,6 +76,7 @@ export function renderMarkdown(md: string): RenderedMarkdown {
           `<span class="codeblock-actions">` +
           `<button class="cb-btn" data-act="copy">Copy</button>` +
           `<button class="cb-btn" data-act="insert">Insert</button>` +
+          `<button class="cb-btn" data-act="apply">Replace file</button>` +
           `<button class="cb-btn" data-act="file">New file</button>` +
           `</span></div>` +
           `<pre><code>${escapeHtml(code)}</code></pre></div>`,

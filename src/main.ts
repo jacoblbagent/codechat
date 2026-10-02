@@ -145,16 +145,34 @@ const models = new Map<string, monaco.editor.ITextModel>()
    Toasts
    ══════════════════════════════════════════════════════════════ */
 
+/** Fade a toast out and drop it — safe to call twice (auto-dismiss vs the ×). */
+function dismissToast(el: HTMLElement): void {
+  if (el.dataset.closing) return
+  el.dataset.closing = '1'
+  el.style.opacity = '0'
+  el.style.transition = 'opacity .2s'
+  setTimeout(() => el.remove(), 220)
+}
+
 function toast(message: string, kind: 'ok' | 'err' | 'info' = 'info', ms = 3200): void {
   const el = document.createElement('div')
   el.className = `toast${kind === 'err' ? ' is-err' : kind === 'ok' ? ' is-ok' : ''}`
-  el.textContent = message
+
+  const text = document.createElement('span')
+  text.className = 'toast-msg'
+  text.textContent = message
+
+  const close = document.createElement('button')
+  close.className = 'toast-x'
+  close.type = 'button'
+  close.title = 'Dismiss'
+  close.setAttribute('aria-label', 'Dismiss notification')
+  close.textContent = '×'
+  close.addEventListener('click', () => dismissToast(el))
+
+  el.append(text, close)
   els.toasts.appendChild(el)
-  setTimeout(() => {
-    el.style.opacity = '0'
-    el.style.transition = 'opacity .2s'
-    setTimeout(() => el.remove(), 220)
-  }, ms)
+  setTimeout(() => dismissToast(el), ms)
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -603,6 +621,43 @@ function insertCode(code: string): void {
   toast(selection && !selection.isEmpty() ? 'Inserted over selection' : 'Inserted at cursor', 'ok')
 }
 
+/**
+ * Replace the whole contents of the file the user has open with `code` — this is
+ * how the assistant's answer gets written into the active buffer. The edit joins
+ * the undo stack (Ctrl+Z restores what was there), and nothing reaches disk
+ * until Ctrl+S.
+ */
+function applyToActiveFile(code: string): void {
+  const path = activePath
+  const model = editor.getModel()
+  if (!path || !model) {
+    toast('Open a file before applying changes', 'err')
+    return
+  }
+  if (workspace.get(path)?.binary) {
+    toast(`${path} is a binary file`, 'err')
+    return
+  }
+  if (model.getValue().trim() === code.trim()) {
+    toast(`${path} already matches this block`, 'ok')
+    return
+  }
+
+  const wasDirty = workspace.isDirty(path)
+  editor.pushUndoStop()
+  editor.executeEdits('chat-apply', [{ range: model.getFullModelRange(), text: code }])
+  editor.pushUndoStop()
+  editor.setPosition({ lineNumber: 1, column: 1 })
+  editor.revealLine(1)
+  editor.focus()
+  toast(
+    wasDirty
+      ? `Replaced ${path} — it had unsaved edits, Ctrl+Z to undo`
+      : `Replaced ${path} — Ctrl+S to save`,
+    'ok',
+  )
+}
+
 const EXT_FOR_LANG: Record<string, string> = {
   typescript: 'ts',
   javascript: 'js',
@@ -651,6 +706,7 @@ chat = new ChatPanel({
   getContext: chatContext,
   getConfig: () => settings,
   insertCode,
+  applyToActiveFile,
   createFileFromCode,
   toast,
   openSettings,
