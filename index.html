@@ -317,23 +317,41 @@
             </div>
           </div>
 
+          <!-- What the next message will carry. Three rows in one block: the two
+               choices, the chunk Ctrl+L attached, and the meter that says what
+               they add up to. Every number here comes from contextPayload() in
+               chat.ts, the same function that builds the request, so the readout
+               cannot disagree with what is actually sent. -->
           <div class="chat-context" id="chat-context">
-            <span class="ctx-label">Context</span>
-            <span class="ctx-file" id="ctx-file">no file</span>
-            <label class="ctx-toggle"><input type="checkbox" id="ctx-include" checked /> include</label>
-            <label class="ctx-toggle"><input type="checkbox" id="ctx-selection" checked /> selection</label>
-          </div>
+            <div class="ctx-choices">
+              <span class="ctx-label">Context</span>
 
-          <!-- What the next message will actually carry, and how big it is. -->
-          <div class="ctx-viz" id="ctx-viz">
-            <div class="ctx-viz-bar" id="ctx-viz-bar" aria-hidden="true"></div>
-            <div class="ctx-viz-legend" id="ctx-viz-legend" role="status" aria-label="Context for the next message"></div>
-          </div>
+              <button class="ctx-pill" id="ctx-include" type="button" aria-pressed="true">
+                <svg class="ctx-pill-tick" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.6l3 3 6-6.6"/></svg>
+                Whole file
+                <span class="ctx-pill-note" id="ctx-include-note">no file</span>
+              </button>
 
-          <div class="ctx-pin is-hidden" id="ctx-pin">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6 4 12l5 6M15 6l5 6-5 6"/></svg>
-            <span class="ctx-pin-label" id="ctx-pin-label"></span>
-            <button class="ctx-pin-x" id="ctx-pin-clear" title="Remove attached code" aria-label="Remove attached code">×</button>
+              <button class="ctx-pill" id="ctx-selection" type="button" aria-pressed="true">
+                <svg class="ctx-pill-tick" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.6l3 3 6-6.6"/></svg>
+                Selection
+                <span class="ctx-pill-note" id="ctx-selection-note">nothing selected</span>
+              </button>
+            </div>
+
+            <!-- A chunk attached with Ctrl+L. It is a fact rather than a switch,
+                 so it carries its own remove control and leaves the two choices
+                 above untouched. -->
+            <div class="ctx-pin is-hidden" id="ctx-pin">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6 4 12l5 6M15 6l5 6-5 6"/></svg>
+              <span class="ctx-pin-label" id="ctx-pin-label"></span>
+              <button class="ctx-pin-x" id="ctx-pin-clear" title="Remove attached code" aria-label="Remove attached code">×</button>
+            </div>
+
+            <div class="ctx-viz" id="ctx-viz">
+              <div class="ctx-viz-bar" id="ctx-viz-bar" aria-hidden="true"></div>
+              <div class="ctx-viz-legend" id="ctx-viz-legend" role="status" aria-label="Context for the next message"></div>
+            </div>
           </div>
 
           <div class="chat-compose">

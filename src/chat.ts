@@ -182,9 +182,10 @@ export class ChatPanel {
     send: HTMLButtonElement
     stop: HTMLButtonElement
     hint: HTMLElement
-    ctxFile: HTMLElement
-    include: HTMLInputElement
-    selection: HTMLInputElement
+    include: HTMLButtonElement
+    includeNote: HTMLElement
+    selection: HTMLButtonElement
+    selectionNote: HTMLElement
     model: HTMLElement
     vendor: HTMLElement
     pin: HTMLElement
@@ -216,9 +217,10 @@ export class ChatPanel {
       send: q('btn-send') as HTMLButtonElement,
       stop: q('btn-stop') as HTMLButtonElement,
       hint: q('compose-hint'),
-      ctxFile: q('ctx-file'),
-      include: q('ctx-include') as HTMLInputElement,
-      selection: q('ctx-selection') as HTMLInputElement,
+      include: q('ctx-include') as HTMLButtonElement,
+      includeNote: q('ctx-include-note'),
+      selection: q('ctx-selection') as HTMLButtonElement,
+      selectionNote: q('ctx-selection-note'),
       model: q('chat-model'),
       vendor: q('chat-vendor'),
       pin: q('ctx-pin'),
@@ -304,8 +306,6 @@ export class ChatPanel {
     this.el.empty.classList.toggle('is-hidden', session.turns.length > 0)
     this.el.input.value = session.draft
     this.autoGrow()
-    this.el.include.checked = session.include
-    this.el.selection.checked = session.selection
     this.renderPin()
     this.syncComposer()
     this.refreshContextViz()
@@ -529,15 +529,19 @@ export class ChatPanel {
     // including ones rebuilt from storage.
     this.el.scroll.addEventListener('click', (e) => this.onMessageClick(e))
 
-    // The two context switches belong to the session, not the panel.
-    for (const box of [this.el.include, this.el.selection]) {
-      box.addEventListener('change', () => {
-        this.session.include = this.el.include.checked
-        this.session.selection = this.el.selection.checked
-        this.refreshContextViz()
-        this.persist()
-      })
-    }
+    // The two context switches belong to the session, not the panel. They are
+    // buttons rather than checkboxes so the state, the cost of turning one on,
+    // and the reason it is unavailable can all live on the same control.
+    this.el.include.addEventListener('click', () => {
+      this.session.include = !this.session.include
+      this.refreshContextViz()
+      this.persist()
+    })
+    this.el.selection.addEventListener('click', () => {
+      this.session.selection = !this.session.selection
+      this.refreshContextViz()
+      this.persist()
+    })
 
     for (const chip of document.querySelectorAll<HTMLElement>('.chip[data-prompt]')) {
       chip.addEventListener('click', () => {
@@ -621,9 +625,7 @@ export class ChatPanel {
     this.el.vendor.title = id
   }
 
-  setActiveFile(path: string | null): void {
-    this.el.ctxFile.textContent = path ? path.split('/').pop()! : 'no file'
-    this.el.ctxFile.title = path ?? ''
+  setActiveFile(): void {
     this.syncApplyButtons()
     this.refreshContextViz()
   }
@@ -727,9 +729,15 @@ export class ChatPanel {
     if (code) {
       const label = pinned ? `Selected code from \`${pinned.where}\`` : 'Selected text'
       blocks.push('', `${label}:`, '```' + (pinned?.language || lang), code, '```')
+      // Count from the *range* when we have one, so this label agrees with the
+      // line count shown on the switch next to it. Trimming the text to send
+      // eats a trailing newline and would make the two read differently.
+      const selLines = ctx.selectionLines
+        ? ctx.selectionLines.end - ctx.selectionLines.start + 1
+        : code.split('\n').length
       segs.push({
         kind: pinned ? 'pinned' : 'selection',
-        label: pinned ? pinned.where : `${code.split('\n').length} lines`,
+        label: pinned ? pinned.where : `${selLines} line${selLines === 1 ? '' : 's'}`,
         chars: code.length,
       })
     }
@@ -737,10 +745,18 @@ export class ChatPanel {
     return { blocks, segs, truncated: segs.some((s) => s.truncated) }
   }
 
-  /** Redraw the meter showing what the next message will carry. */
+  /**
+   * Redraw everything that describes the next message: the two switches and the
+   * meter under them. Both come from `contextPayload`, the same function that
+   * builds the request, so the readout cannot disagree with what is sent.
+   */
   refreshContextViz(): void {
+    const ctx = this.deps.getContext()
     const { segs, truncated } = this.contextPayload(this.session)
     const total = segs.reduce((n, s) => n + s.chars, 0)
+    const budget = this.maxContextChars
+
+    this.syncContextToggles(ctx)
 
     // Composition bar: segments are proportional to the total, so a small
     // selection stays visible next to a whole file.
@@ -750,6 +766,7 @@ export class ChatPanel {
         const span = document.createElement('span')
         span.className = `ctx-seg kind-${s.kind}`
         span.style.width = `${(s.chars / total) * 100}%`
+        span.title = `${s.label} — ${s.chars.toLocaleString()} characters`
         this.el.vizBar.appendChild(span)
       }
     }
@@ -757,7 +774,10 @@ export class ChatPanel {
     this.el.vizLegend.replaceChildren()
     if (!segs.length) {
       const empty = document.createElement('span')
-      empty.textContent = 'No context attached — tick include, or select code'
+      empty.className = 'ctx-note'
+      empty.textContent = ctx.path
+        ? 'No context attached — the message goes on its own'
+        : 'No context attached — open a file to send one'
       this.el.vizLegend.appendChild(empty)
       return
     }
@@ -768,22 +788,66 @@ export class ChatPanel {
       const name = document.createElement('b')
       name.textContent = s.label
       chip.append(name, document.createTextNode(` ${fmtChars(s.chars)}`))
-      chip.title = `${s.label} — ${s.chars.toLocaleString()} characters`
+      chip.title = `${s.label} — ${s.chars.toLocaleString()} characters${
+        s.truncated ? `, stopped at the ${budget.toLocaleString()} character cap` : ''
+      }`
       this.el.vizLegend.appendChild(chip)
     }
 
     if (truncated) {
       const warn = document.createElement('span')
       warn.className = 'ctx-chip is-warn'
-      warn.textContent = `file cut at ${fmtChars(this.maxContextChars)}`
-      warn.title = `The whole-file block is capped at ${this.maxContextChars.toLocaleString()} characters`
+      warn.textContent = `file cut at ${fmtChars(budget)}`
+      warn.title = `The whole-file block stops at ${budget.toLocaleString()} characters. Raise it with codechat.maxContextChars in Settings.`
       this.el.vizLegend.appendChild(warn)
     }
 
+    // The total is only half a fact without the cap it is measured against.
     const totalEl = document.createElement('span')
-    totalEl.className = 'ctx-viz-total'
-    totalEl.textContent = `${fmtChars(total)} chars`
+    totalEl.className = truncated ? 'ctx-viz-total is-warn' : 'ctx-viz-total'
+    totalEl.textContent = `${fmtChars(total)} / ${fmtChars(budget)} chars`
+    totalEl.title = `${total.toLocaleString()} characters attached, against the ${budget.toLocaleString()} character cap on the whole-file block`
     this.el.vizLegend.appendChild(totalEl)
+  }
+
+  /**
+   * Write the state, the cost and the reason onto the two switches. A tick means
+   * on, the note says what it is worth right now, a dashed border means on with
+   * nothing to send, and dimming means a pinned chunk is standing in for it —
+   * all of which the bare checkboxes left you to infer.
+   */
+  private syncContextToggles(ctx: ChatContext): void {
+    const include = this.el.include
+    include.setAttribute('aria-pressed', String(this.session.include))
+    include.disabled = !ctx.path
+    include.classList.toggle('is-empty', this.session.include && !ctx.path)
+    this.el.includeNote.textContent = ctx.path ? ctx.path.split('/').pop()! : 'no file'
+    include.title = ctx.path
+      ? `${this.session.include ? 'Sending' : 'Not sending'} the whole file — ${ctx.path}`
+      : 'No file is open in the editor'
+
+    const selection = this.el.selection
+    // Count the line *range*, not the trimmed text: trimming eats a trailing
+    // newline and made this disagree with the line count on a pinned chunk.
+    const lines = ctx.selectionLines
+      ? ctx.selectionLines.end - ctx.selectionLines.start + 1
+      : ctx.selection.trim()
+        ? ctx.selection.trim().split('\n').length
+        : 0
+    const pinned = Boolean(this.session.pinned)
+    selection.setAttribute('aria-pressed', String(this.session.selection))
+    selection.classList.toggle('is-empty', this.session.selection && !lines && !pinned)
+    selection.classList.toggle('is-muted', pinned)
+    this.el.selectionNote.textContent = pinned
+      ? 'pinned instead'
+      : lines
+        ? `${lines} line${lines === 1 ? '' : 's'}`
+        : 'nothing selected'
+    selection.title = pinned
+      ? 'A chunk pinned with Ctrl+L is sent instead of the live selection'
+      : lines
+        ? `${this.session.selection ? 'Sending' : 'Not sending'} the ${lines} selected line${lines === 1 ? '' : 's'}`
+        : 'Select code in the editor to send a chunk alongside the message'
   }
 
   async send(preset?: string): Promise<void> {
