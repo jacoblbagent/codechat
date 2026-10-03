@@ -15,6 +15,7 @@ import {
 } from './monaco'
 import { CreditsRow } from './credits-ui'
 import { diffStat, type DiffStat } from './diff'
+import { clearLastDirectory, loadLastDirectory, saveLastDirectory } from './fs-handles'
 import { ModelPicker } from './model-picker'
 import { fmtAgo, Repo, type Commit, type CommitFile } from './scm'
 import { buildMonacoOptions, defaultCore, settingById, type SettingDef } from './settings'
@@ -232,7 +233,17 @@ function dismissToast(el: HTMLElement): void {
   setTimeout(() => el.remove(), 220)
 }
 
-function toast(message: string, kind: 'ok' | 'err' | 'info' = 'info', ms = 3200): void {
+interface ToastAction {
+  label: string
+  onClick: () => void
+}
+
+function toast(
+  message: string,
+  kind: 'ok' | 'err' | 'info' = 'info',
+  ms = 3200,
+  action?: ToastAction,
+): void {
   const el = document.createElement('div')
   el.className = `toast${kind === 'err' ? ' is-err' : kind === 'ok' ? ' is-ok' : ''}`
 
@@ -248,7 +259,23 @@ function toast(message: string, kind: 'ok' | 'err' | 'info' = 'info', ms = 3200)
   close.textContent = '×'
   close.addEventListener('click', () => dismissToast(el))
 
-  el.append(text, close)
+  el.append(text)
+
+  // A toast that asks for a decision (reopen a folder?) carries the button. It
+  // is dismissed first, so the click cannot be repeated against a stale target.
+  if (action) {
+    const button = document.createElement('button')
+    button.className = 'toast-action'
+    button.type = 'button'
+    button.textContent = action.label
+    button.addEventListener('click', () => {
+      dismissToast(el)
+      action.onClick()
+    })
+    el.append(button)
+  }
+
+  el.append(close)
   els.toasts.appendChild(el)
   setTimeout(() => dismissToast(el), ms)
 }
@@ -810,6 +837,63 @@ document.getElementById('btn-scm-save-all')?.addEventListener('click', () => {
 })
 
 /* ══════════════════════════════════════════════════════════════
+   Session: which files were open, and in which folder
+   ══════════════════════════════════════════════════════════════ */
+
+/**
+ * Remembering the folder handle is not enough on its own: it would restore a
+ * tree with nothing open in it. The open tabs and the active file are recorded
+ * alongside, keyed by folder name, so a reload (or a rebuild) puts the same
+ * files back in front of you. The demo workspace has its own fixed starter
+ * file, so only a real folder is recorded.
+ */
+const SESSION_KEY = 'codechat.session.v1'
+
+interface Session {
+  root: string
+  tabs: string[]
+  active: string | null
+}
+
+function saveSession(): void {
+  if (!workspace.isRealDirectory) return
+  const session: Session = { root: workspace.rootName, tabs: openTabs, active: activePath }
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session))
+  } catch {
+    /* private mode — the folder still reopens, just without the tabs */
+  }
+}
+
+/** The remembered session, but only for the folder it was recorded in. */
+function loadSession(root: string): Session | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<Session>
+    if (parsed.root !== root || !Array.isArray(parsed.tabs)) return null
+    return {
+      root,
+      tabs: parsed.tabs.filter((p): p is string => typeof p === 'string'),
+      active: typeof parsed.active === 'string' ? parsed.active : null,
+    }
+  } catch {
+    return null
+  }
+}
+
+let sessionTimer: number | null = null
+
+/** renderTabs runs on every keystroke; one write per idle moment is plenty. */
+function scheduleSaveSession(): void {
+  if (sessionTimer !== null) clearTimeout(sessionTimer)
+  sessionTimer = window.setTimeout(() => {
+    sessionTimer = null
+    saveSession()
+  }, 400)
+}
+
+/* ══════════════════════════════════════════════════════════════
    Tabs
    ══════════════════════════════════════════════════════════════ */
 
@@ -844,7 +928,7 @@ function openFile(path: string, keepFocus = false): void {
 
   renderTabs()
   renderTree()
-  chat.setActiveFile(path)
+  chat.setActiveFile()
   if (!keepFocus) editor.focus()
   // On a narrow screen get the drawer out of the way of the file just opened.
   if (isNarrow()) setSidebarOpen(false)
@@ -869,7 +953,7 @@ function closeTab(path: string): void {
     else {
       editor.setModel(null)
       els.welcome.classList.remove('is-hidden')
-      chat.setActiveFile(null)
+      chat.setActiveFile()
     }
   }
   renderTabs()
@@ -900,6 +984,7 @@ function renderTabs(): void {
     })
     els.tabs.appendChild(tab)
   }
+  scheduleSaveSession()
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1566,28 +1651,106 @@ els.chatResizer.addEventListener('pointercancel', endDrag)
    File loading
    ══════════════════════════════════════════════════════════════ */
 
-async function openFolder(): Promise<void> {
-  if (Workspace.canOpenDirectory()) {
-    try {
-      const { opened, skipped } = await workspace.openDirectory()
-      openTabs = []
-      activePath = null
-      editor.setModel(null)
-      els.welcome.classList.remove('is-hidden')
-      chat.setActiveFile(null)
-      renderTabs()
-      renderTree()
-      toast(`Opened ${workspace.rootName} — ${opened} files${skipped ? `, ${skipped} skipped` : ''}`, 'ok')
-      const first = workspace.paths()[0]
-      if (first) openFile(first, true)
-      return
-    } catch (err) {
-      if ((err as Error)?.name === 'AbortError') return
-      toast((err as Error).message, 'err')
-      return
-    }
+/**
+ * Show a directory that has just been opened, whether it was picked just now or
+ * remembered from the last session. The old tabs go, and the ones from the last
+ * session come back — filtered against what is actually there, since a folder
+ * may have changed while it was closed — or the first file if nothing was.
+ */
+function applyDirectory(opened: number, skipped: number, session: Session | null): void {
+  openTabs = []
+  activePath = null
+  editor.setModel(null)
+  els.welcome.classList.remove('is-hidden')
+  chat.setActiveFile()
+  renderTabs()
+  renderTree()
+  toast(`Opened ${workspace.rootName} — ${opened} files${skipped ? `, ${skipped} skipped` : ''}`, 'ok')
+
+  const remembered = (session?.tabs ?? []).filter((path) => {
+    const file = workspace.get(path)
+    return !!file && !file.binary
+  })
+  if (remembered.length) {
+    // Opening each in turn rebuilds the tab strip in its old order; the active
+    // file is opened last so it is the one in front.
+    for (const path of remembered) openFile(path, true)
+    const active = session?.active && remembered.includes(session.active) ? session.active : remembered[0]
+    openFile(active, true)
+    return
   }
-  pickFilesFallback(true)
+  const first = workspace.paths()[0]
+  if (first) openFile(first, true)
+}
+
+/** Open the picker and show the folder the user chooses. */
+async function openFolder(): Promise<void> {
+  if (!Workspace.canOpenDirectory()) {
+    pickFilesFallback(true)
+    return
+  }
+  try {
+    const { handle, opened, skipped } = await workspace.openDirectory()
+    // Remember it before anything else: this is the folder the next load —
+    // including a rebuild — will be offered back.
+    await saveLastDirectory(handle)
+    applyDirectory(opened, skipped, loadSession(workspace.rootName))
+  } catch (err) {
+    if ((err as Error)?.name === 'AbortError') return
+    toast((err as Error).message, 'err')
+  }
+}
+
+/**
+ * Read a remembered handle back in. Called either on its own (the browser still
+ * holds the permission, so nothing has to be asked) or from the toast button,
+ * which is the only place a lapsed permission can be asked for again.
+ */
+async function reopenDirectory(handle: FileSystemDirectoryHandle): Promise<void> {
+  try {
+    if ((await Workspace.permission(handle)) !== 'granted') {
+      if ((await Workspace.requestPermission(handle)) !== 'granted') {
+        toast(`${handle.name} — permission was not granted`, 'err')
+        return
+      }
+    }
+    const { opened, skipped } = await workspace.openDirectory(handle)
+    await saveLastDirectory(handle)
+    applyDirectory(opened, skipped, loadSession(workspace.rootName))
+  } catch (err) {
+    // Renamed, moved or unmounted — do not keep offering a folder that is gone.
+    await clearLastDirectory()
+    toast(`Could not reopen ${handle.name}: ${(err as Error).message}`, 'err')
+  }
+}
+
+/**
+ * Put the folder from the last session back, when the browser allows it.
+ *
+ * A granted handle is reopened on the spot, with no prompt and no picker — that
+ * is the case that makes a rebuild or a dev-server reload feel like it never
+ * happened. A handle that has slipped back to 'prompt' cannot be reopened
+ * without a click, so it is offered as a toast button instead; a refused one is
+ * forgotten, and the built-in demo workspace stands as the fallback.
+ */
+async function restoreLastFolder(): Promise<void> {
+  if (!Workspace.canOpenDirectory()) return
+  const handle = await loadLastDirectory()
+  if (!handle) return
+
+  const permission = await Workspace.permission(handle)
+  if (permission === 'denied') {
+    await clearLastDirectory()
+    return
+  }
+  if (permission === 'prompt') {
+    toast(`Last folder: ${handle.name}`, 'info', 12000, {
+      label: 'Reopen',
+      onClick: () => void reopenDirectory(handle),
+    })
+    return
+  }
+  await reopenDirectory(handle)
 }
 
 function pickFilesFallback(directory: boolean): void {
@@ -2014,6 +2177,10 @@ openFile('src/App.tsx', true)
 if (!settings.apiKey) {
   toast('Add your OpenRouter API key in Settings to start chatting', 'info', 6000)
 }
+
+// Then, if a real folder was open last time, put it back over the demo — the
+// demo loads first so the IDE is usable immediately either way. See fs-handles.ts.
+void restoreLastFolder()
 
 window.addEventListener('resize', () => editor.layout())
 

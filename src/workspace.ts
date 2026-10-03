@@ -90,12 +90,57 @@ export class Workspace {
     return typeof (window as any).showDirectoryPicker === 'function'
   }
 
-  async openDirectory(): Promise<{ opened: number; skipped: number }> {
-    const picker = (window as any).showDirectoryPicker
-    if (typeof picker !== 'function') {
-      throw new Error('This browser cannot open folders. Use Chrome or Edge, or drag files in.')
+  /**
+   * The permission the browser is currently holding for a directory handle —
+   * 'granted', 'prompt' (a click can ask again) or 'denied'. A browser without
+   * the permission methods (the fallback `<input type=file>` path) is treated
+   * as granted, because there is nothing to ask.
+   */
+  static async permission(handle: FileSystemDirectoryHandle): Promise<PermissionState> {
+    const h = handle as any
+    if (typeof h.queryPermission !== 'function') return 'granted'
+    try {
+      return (await h.queryPermission({ mode: 'readwrite' })) as PermissionState
+    } catch {
+      return 'denied'
     }
-    const dir: any = await picker.call(window, { mode: 'readwrite', id: 'codechat' })
+  }
+
+  /**
+   * Ask for it. Only ever valid from inside a user gesture — the browser throws
+   * or silently resolves to 'prompt' otherwise — which is why a restored folder
+   * that is no longer granted is offered as a toast button rather than reopened
+   * by itself.
+   */
+  static async requestPermission(handle: FileSystemDirectoryHandle): Promise<PermissionState> {
+    const h = handle as any
+    if (typeof h.requestPermission !== 'function') return 'granted'
+    try {
+      return (await h.requestPermission({ mode: 'readwrite' })) as PermissionState
+    } catch {
+      return 'denied'
+    }
+  }
+
+  /**
+   * Open a directory. With no argument the picker is shown; with a remembered
+   * handle (a previous session's folder) the picker is skipped and that folder
+   * is walked again — so restoring and opening share one code path, and a
+   * restored folder is read exactly as freshly as a chosen one.
+   */
+  async openDirectory(
+    existing?: FileSystemDirectoryHandle,
+  ): Promise<{ handle: FileSystemDirectoryHandle; opened: number; skipped: number }> {
+    let dir: FileSystemDirectoryHandle
+    if (existing) {
+      dir = existing
+    } else {
+      const picker = (window as any).showDirectoryPicker
+      if (typeof picker !== 'function') {
+        throw new Error('This browser cannot open folders. Use Chrome or Edge, or drag files in.')
+      }
+      dir = (await picker.call(window, { mode: 'readwrite', id: 'codechat' })) as FileSystemDirectoryHandle
+    }
 
     this.files.clear()
     this.collapsed.clear()
@@ -137,7 +182,7 @@ export class Workspace {
     }
     await walk(dir, '')
     this.emit()
-    return { opened, skipped }
+    return { handle: dir, opened, skipped }
   }
 
   /** Fallback for browsers without the picker: <input type=file> / drag-drop. */

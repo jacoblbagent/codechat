@@ -44,6 +44,13 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   Access API (Chrome/Edge) and `Ctrl+S` writes changes back to disk. Browsers without the
   picker fall back to `<input type="file">` / drag-and-drop, and an in-memory demo
   workspace ships by default.
+  - **The folder is remembered.** The directory handle is kept in IndexedDB (the only store
+    a browser will accept one in) and the files you had open in `localStorage`, so the next
+    load — a reload, or a rebuild of this app — comes back to the same folder, the same tabs
+    and the same active file. When the browser still holds the permission it reopens
+    silently; when the grant has lapsed it offers a **Reopen** button in a toast, because
+    asking again needs a click; when permission has been refused the handle is forgotten and
+    the demo workspace stands.
 - **Source Control** — the rail icon (VS Code's own codicon) opens the change list, with
   the count on the icon: every file whose buffer has moved away from what was last saved
   or committed, each with a `+12 −3` line stat, per-file **Stage** / **Save** / **Discard**
@@ -233,6 +240,11 @@ demo/flowboard/     the starter project, as real files (React + RTK Kanban board
   data. The last 20 are kept and each transcript is capped at its 60 most recent
   turns; if the origin is over quota the app falls back to saving only the session
   you are using rather than dropping all of them.
+- **The remembered folder is a browser permission, not a setting.** The directory handle
+  lives in IndexedDB under `codechat.fs` and the open files in `localStorage` under
+  `codechat.session.v1`; clearing site data forgets both, and nothing is uploaded. A handle
+  the browser will no longer read — the folder was renamed, moved or unmounted — is dropped
+  on the next load with a note, rather than offered again.
 - The model list is a **snapshot**: it is fetched once and cached for a day, so a model
   released in the last few hours may be missing. Type its id in the picker and it will be
   used anyway. Prices and context windows come from OpenRouter and are shown, not enforced

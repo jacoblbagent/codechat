@@ -835,32 +835,91 @@ kbd {
   max-height: 240px; overflow-y: auto;
 }
 
+/* ── Context ───────────────────────────────────────────────────
+   One block, three rows: the choices, the chunk Ctrl+L attached, and the meter
+   that says what they add up to. The switches state their cost, because the old
+   bare "include"/"selection" boxes left you guessing what they meant and how
+   much they were worth. */
 .chat-context {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 6px 12px; border-top: 1px solid var(--border);
-  font-size: 11px; color: var(--fg-dim); flex: none;
+  display: flex; flex-direction: column; gap: 7px; flex: none;
+  padding: 8px 12px 9px; border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--fg-dim);
 }
-.ctx-label { text-transform: uppercase; letter-spacing: 0.06em; }
-.ctx-file { font-family: var(--mono); color: var(--fg); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ctx-toggle { display: flex; align-items: center; gap: 4px; cursor: pointer; }
-.ctx-toggle input { accent-color: var(--blue-btn); margin: 0; }
+
+.ctx-choices { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ctx-label {
+  flex: none; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+}
+
+/* A switch with its cost written on it. Pressed is carried by the fill and the
+   tick, so off is legible without a second colour. */
+.ctx-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 7px 2px 5px; max-width: 100%;
+  background: transparent; color: var(--fg-dim);
+  border: 1px solid var(--border); border-radius: 4px;
+  font: inherit; font-size: 11px; cursor: pointer;
+  touch-action: manipulation;
+}
+.ctx-pill:hover { color: var(--fg); border-color: var(--border-strong); }
+.ctx-pill:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.ctx-pill[aria-pressed='false'] { border-style: dashed; }
+.ctx-pill[aria-pressed='true'] {
+  color: var(--fg-bright); background: var(--bg-hover); border-color: var(--border-strong);
+}
+.ctx-pill-tick {
+  width: 11px; height: 11px; flex: none;
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round;
+  opacity: 0; transition: opacity 0.12s ease;
+}
+.ctx-pill[aria-pressed='true'] .ctx-pill-tick { opacity: 1; color: var(--blue); }
+.ctx-pill-note {
+  font-family: var(--mono); font-size: 10px; color: var(--fg-dim);
+  max-width: 132px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Switched on with nothing to send — dashed, so it does not read as included. */
+.ctx-pill.is-empty { border-style: dashed; color: var(--fg-dim); }
+.ctx-pill.is-empty .ctx-pill-tick { opacity: 0.35; }
+/* Switched on, but a pinned chunk is standing in for it. */
+.ctx-pill.is-muted { opacity: 0.6; }
+.ctx-pill:disabled { opacity: 0.5; cursor: default; }
+
+/* The chunk Ctrl+L attached: a fact, not a switch. */
+.ctx-pin {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  padding: 3px 4px 3px 8px;
+  background: var(--accent-soft); border: 1px solid var(--border-soft);
+  border-left: 2px solid var(--blue); border-radius: 4px;
+}
+.ctx-pin > svg { flex: none; color: var(--blue); }
+.ctx-pin-label {
+  min-width: 0; font-family: var(--mono); color: var(--fg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ctx-pin-x {
+  margin-left: auto; flex: none; padding: 0 4px;
+  background: none; border: none; border-radius: 3px;
+  color: var(--fg-dim); font-size: 13px; line-height: 1; cursor: pointer;
+}
+.ctx-pin-x:hover { color: var(--fg-bright); background: var(--hover-overlay); }
 
 /* ── Context meter ─────────────────────────────────────────────
-   A live readout of what the next message carries. The bar is a *composition*
-   bar (segments proportional to the total) rather than a budget bar, so a small
-   selection stays visible next to a whole file, and the legend gives the numbers. */
-.ctx-viz { padding: 4px 12px 6px; flex: none; }
+   A composition bar (segments proportional to the whole) rather than a budget
+   bar, so a small selection stays visible next to a whole file. */
+.ctx-viz { display: flex; flex-direction: column; gap: 5px; }
 .ctx-viz-bar {
-  display: flex; height: 4px; border-radius: 2px; overflow: hidden;
+  display: flex; gap: 1px; height: 4px; border-radius: 2px; overflow: hidden;
   background: var(--bg-input);
 }
-.ctx-seg { height: 100%; min-width: 2px; }
+/* Keep the empty track visible rather than collapsing to nothing. */
+.ctx-viz-bar:empty::after { content: ''; flex: 1; }
+.ctx-seg { height: 100%; min-width: 3px; }
 .ctx-seg.kind-file { background: var(--blue); }
 .ctx-seg.kind-selection { background: var(--green); }
 .ctx-seg.kind-pinned { background: var(--violet); }
 .ctx-viz-legend {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  margin-top: 5px; font-size: 10.5px; line-height: 1.4; color: var(--fg-dim);
+  font-size: 10.5px; line-height: 1.45;
 }
 .ctx-chip { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .ctx-chip::before {
@@ -873,26 +932,10 @@ kbd {
 .ctx-chip b { color: var(--fg); font-weight: 500; font-family: var(--mono); }
 .ctx-chip.is-warn { color: var(--yellow); }
 .ctx-chip.is-warn::before { background: var(--yellow); }
-.ctx-viz-total { margin-left: auto; font-family: var(--mono); }
-
-/* A chunk of code attached with Ctrl+L, waiting to ride along with the next message. */
-.ctx-pin {
-  display: flex; align-items: center; gap: 6px;
-  margin: 8px 10px 0; padding: 5px 8px;
-  background: var(--bg-code-inline); border: 1px solid var(--border-soft);
-  border-left: 2px solid var(--blue); border-radius: 4px;
-  font-size: 11px; color: var(--fg-dim); flex: none;
+.ctx-viz-total {
+  margin-left: auto; font-family: var(--mono); font-variant-numeric: tabular-nums;
 }
-.ctx-pin svg { flex: none; color: var(--blue); }
-.ctx-pin-label {
-  font-family: var(--mono); color: var(--fg);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.ctx-pin-x {
-  margin-left: auto; padding: 0 2px; background: none; border: none;
-  color: var(--fg-dim); font-size: 14px; line-height: 1; cursor: pointer;
-}
-.ctx-pin-x:hover { color: var(--fg-bright); }
+.ctx-viz-total.is-warn { color: var(--yellow); }
 
 .chat-compose { border-top: 1px solid var(--border); padding: 8px 10px 10px; flex: none; }
 .chat-input {
@@ -980,6 +1023,12 @@ kbd {
   color: var(--fg-dim); font-size: 15px; line-height: 1;
 }
 .toast-x:hover { color: var(--fg-bright); }
+/* The action on a toast that asks for a decision (reopen a folder? etc.). */
+.toast-action {
+  flex: none; padding: 2px 8px; border: 1px solid var(--border-soft); border-radius: 3px;
+  background: none; color: var(--fg-bright); font-size: 11px; font-weight: 500; cursor: pointer;
+}
+.toast-action:hover { background: var(--hover-overlay); }
 .toast.is-err { border-left-color: var(--red); }
 .toast.is-ok { border-left-color: var(--green); }
 @keyframes slideIn { from { transform: translateX(16px); opacity: 0; } }
