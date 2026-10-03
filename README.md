@@ -74,6 +74,13 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
 - **Chat panel** — streaming responses from any OpenRouter model (default
   `deepseek/deepseek-v4.1-flash`), toggled with `Ctrl+Alt+C`, resizable by dragging
   its edge.
+  - **One composer card.** Everything the next message is made of sits in a single
+    frame at the bottom of the panel: the context switches and their meter along
+    the top, the box you type in beneath them with an icon send button, and the
+    attach / thinking controls under that. Your own turns tuck to the right as
+    bubbles; the assistant answers down the full width, so code blocks and diffs
+    have room. Reasoning arrives as a collapsed step above the answer rather than
+    a stray rail.
   - **Sessions.** The panel holds several conversations at once, one tab each,
     under the header. `+` (or `Ctrl+Shift+K`) opens a new one and `×` closes it;
     a tab is named after the first thing you ask it. Each session owns its own
@@ -91,10 +98,13 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   - **New file** from a code block,
   - highlight code and press `Ctrl+L` (or **+ Selection**) to attach that exact
     chunk as pinned context for your next message,
-  - watch the **context meter** under the messages: a segmented bar and legend
-    showing every source going into the next request (file, selection, pinned
-    chunk) with its exact size and the running total, so you can see what the
-    model is actually being told before you hit send,
+  - read the **context meter** at the top of the composer: two switches that
+    state their own cost (`Whole file · App.tsx`, `Selection · 8 lines`), a
+    segmented bar showing every source going into the next request (file,
+    selection, pinned chunk) and a legend giving each one's exact size against
+    the cap, so you can see what the model is actually being told before you
+    hit send. A switch that is on with nothing to send says so; one that a
+    pinned chunk is standing in for is dimmed and says `pinned instead`,
   - pick a **thinking level** (Off / Low / Medium / High) next to the composer,
     sent to OpenRouter as a reasoning effort; the reasoning it produces streams
     into a collapsible panel above the answer. Left at **Off**, no reasoning
