@@ -198,8 +198,35 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .menubar { display: flex; gap: 2px; }
 .menubar-item {
   padding: 3px 7px; border-radius: 4px; color: var(--fg); font-size: 12px;
+  border: 0; background: none; cursor: pointer; font-family: inherit;
+  touch-action: manipulation;
 }
 .menubar-item:hover { background: var(--hover-overlay); }
+.menubar-item[aria-expanded='true'] { background: var(--hover-overlay); color: var(--fg-bright); }
+
+/* A drop-down from a menu-bar item. Only File has one — the other entries are
+   single actions — so it is a small popover rather than a menu system. */
+.menu { position: relative; display: inline-flex; }
+.menu-pop {
+  position: absolute; top: calc(100% + 5px); left: 0; z-index: 40;
+  min-width: 216px; padding: 4px;
+  background: var(--bg-elevated); border: 1px solid var(--border-strong);
+  border-radius: 6px; box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column;
+}
+.menu-item {
+  display: flex; align-items: center; gap: 16px; width: 100%;
+  padding: 5px 8px; border: 0; border-radius: 4px; background: none;
+  color: var(--fg); font: 12px var(--ui); text-align: left; cursor: pointer;
+  white-space: nowrap; touch-action: manipulation;
+}
+.menu-item:hover { background: var(--hover-overlay); color: var(--fg-bright); }
+.menu-item:disabled { opacity: 0.45; cursor: default; }
+.menu-item:disabled:hover { background: none; color: var(--fg); }
+.menu-item kbd {
+  margin-left: auto; font: 11px var(--mono); color: var(--fg-dim);
+}
+.menu-sep { height: 1px; margin: 4px 6px; background: var(--border); }
 
 .titlebar-center { display: flex; justify-content: center; }
 .command-center {

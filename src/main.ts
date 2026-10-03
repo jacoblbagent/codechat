@@ -1753,6 +1753,16 @@ async function restoreLastFolder(): Promise<void> {
   await reopenDirectory(handle)
 }
 
+/** Reopen the folder this browser last held, asking for permission if it lapsed. */
+async function reopenLastFolder(): Promise<void> {
+  const handle = await loadLastDirectory()
+  if (!handle) {
+    toast('No folder has been opened in this browser yet', 'info')
+    return
+  }
+  await reopenDirectory(handle)
+}
+
 function pickFilesFallback(directory: boolean): void {
   const input = document.createElement('input')
   input.type = 'file'
@@ -1773,16 +1783,40 @@ function pickFilesFallback(directory: boolean): void {
 }
 
 document.getElementById('btn-open-folder')?.addEventListener('click', () => void openFolder())
-document.getElementById('btn-new-file')?.addEventListener('click', () => {
+/** Ask for a path and create a file in the workspace. */
+function newFile(): void {
   const name = window.prompt('New file path', 'untitled.ts')
   if (!name) return
+  const path = name.trim()
   try {
-    workspace.create(name.trim(), '')
-    openFile(name.trim())
+    workspace.create(path, '')
+    renderTree()
+    openFile(path)
   } catch (err) {
     toast((err as Error).message, 'err')
   }
-})
+}
+
+/**
+ * Ask for a path and make a directory. Nothing is added to the editor: a folder
+ * has no buffer, it only has to appear in the explorer — and, when a real
+ * directory is open, on disk.
+ */
+async function newFolder(): Promise<void> {
+  const name = window.prompt('New folder path', 'src/new-folder')
+  if (!name) return
+  const path = name.trim()
+  try {
+    const where = await workspace.createFolder(path)
+    renderTree()
+    toast(`Created ${path}${where === 'disk' ? ' on disk' : ''}`, 'ok')
+  } catch (err) {
+    toast((err as Error).message, 'err')
+  }
+}
+
+document.getElementById('btn-new-file')?.addEventListener('click', newFile)
+document.getElementById('btn-new-folder')?.addEventListener('click', () => void newFolder())
 document.getElementById('btn-collapse')?.addEventListener('click', () => {
   for (const path of workspace.paths()) {
     const parts = path.split('/')
@@ -1826,6 +1860,31 @@ async function savePath(path: string): Promise<'disk' | 'memory'> {
   return workspace.save(path, model.getValue())
 }
 
+/** Write every changed file back — to disk where there is a handle, in-memory otherwise. */
+async function saveAll(): Promise<void> {
+  const files = scmChangedFiles()
+  if (!files.length) {
+    toast('Nothing to save', 'ok')
+    return
+  }
+  const failed: string[] = []
+  for (const file of files) {
+    try {
+      await savePath(file.path)
+    } catch {
+      failed.push(file.path)
+    }
+  }
+  renderTree()
+  renderTabs()
+  renderScm()
+  const saved = files.length - failed.length
+  toast(
+    failed.length ? `Saved ${saved}, ${failed.length} failed: ${failed.join(', ')}` : `Saved ${saved} file${saved === 1 ? '' : 's'}`,
+    failed.length ? 'err' : 'ok',
+  )
+}
+
 async function saveActive(): Promise<void> {
   if (!activePath) return
   if (!editor.getModel()) return
@@ -1842,6 +1901,11 @@ async function saveActive(): Promise<void> {
 
 const commands: Record<string, () => void> = {
   'open-folder': () => void openFolder(),
+  'reopen-folder': () => void reopenLastFolder(),
+  'new-file': newFile,
+  'new-folder': () => void newFolder(),
+  save: () => void saveActive(),
+  'save-all': () => void saveAll(),
   'quick-open': () => openQuickOpen(),
   'toggle-chat': () => toggleChatPanel(),
   'toggle-theme': () => toggleTheme(),
@@ -1851,6 +1915,49 @@ const commands: Record<string, () => void> = {
 for (const btn of document.querySelectorAll<HTMLElement>('[data-command]')) {
   btn.addEventListener('click', () => commands[btn.dataset.command!]?.())
 }
+
+/* ── File menu ─────────────────────────────────────────────────
+   The other menu-bar entries run a single command; File is the one that drops
+   a menu, so it owns its open state — and refreshes the entries whose
+   availability depends on what is open or unsaved. */
+const fileMenuBtn = document.getElementById('btn-file-menu')
+const fileMenu = document.getElementById('file-menu')
+
+function fileMenuOpen(): boolean {
+  return !!fileMenu && !fileMenu.classList.contains('is-hidden')
+}
+
+function setFileMenuOpen(open: boolean): void {
+  if (!fileMenu || !fileMenuBtn) return
+  fileMenu.classList.toggle('is-hidden', !open)
+  fileMenuBtn.setAttribute('aria-expanded', String(open))
+  if (open) void refreshFileMenu()
+}
+
+async function refreshFileMenu(): Promise<void> {
+  const reopen = document.getElementById('menu-reopen') as HTMLButtonElement | null
+  if (reopen) {
+    const handle = await loadLastDirectory()
+    reopen.disabled = !handle
+    reopen.title = handle ? `Reopen ${handle.name}` : 'No folder has been opened in this browser yet'
+  }
+  const changed = scmChangedFiles().length > 0
+  for (const command of ['save', 'save-all']) {
+    const item = document.querySelector<HTMLButtonElement>(`.menu-item[data-command="${command}"]`)
+    if (item) item.disabled = !changed
+  }
+}
+
+fileMenuBtn?.addEventListener('click', (e) => {
+  e.stopPropagation()
+  setFileMenuOpen(!fileMenuOpen())
+})
+fileMenu?.addEventListener('click', (e) => {
+  // Choosing an entry runs its command and drops the menu behind it.
+  if ((e.target as HTMLElement).closest('.menu-item')) setFileMenuOpen(false)
+})
+// Anywhere else dismisses it, like every other menu.
+document.addEventListener('click', () => setFileMenuOpen(false))
 
 /** Attach the editor selection to the chat, revealing the panel if needed. */
 function attachSelectionToChat(): void {
@@ -1882,6 +1989,21 @@ window.addEventListener('keydown', (e) => {
     toggleTheme()
     return
   }
+  if (mod && e.altKey && e.key.toLowerCase() === 'n') {
+    e.preventDefault()
+    newFile()
+    return
+  }
+  if (mod && e.altKey && e.key.toLowerCase() === 'f') {
+    e.preventDefault()
+    void newFolder()
+    return
+  }
+  if (mod && e.altKey && e.key.toLowerCase() === 'o') {
+    e.preventDefault()
+    void openFolder()
+    return
+  }
   if (mod && !e.shiftKey && e.key.toLowerCase() === 'p') {
     e.preventDefault()
     openQuickOpen()
@@ -1904,6 +2026,10 @@ window.addEventListener('keydown', (e) => {
     return
   }
   if (e.key === 'Escape') {
+    if (fileMenuOpen()) {
+      setFileMenuOpen(false)
+      return
+    }
     if (!els.quickOpen.classList.contains('is-hidden')) {
       closeQuickOpen()
       return

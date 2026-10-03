@@ -9,7 +9,10 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
 ## What it does
 
 - **VS Code shell** — title bar, activity bar, explorer, tabs, status bar, command palette
-  (`Ctrl+P`), search view, minimap, bracket-pair colouring. The rail buttons are
+  (`Ctrl+P`), search view, minimap, bracket-pair colouring. **File** drops a menu —
+  New File… (`Ctrl+Alt+N`), New Folder… (`Ctrl+Alt+F`), Open Folder… (`Ctrl+Alt+O`),
+  Open Last Folder, Save (`Ctrl+S`) and Save All — with Open Last Folder and the
+  save entries greyed out when there is nothing to act on. The rail buttons are
   toggles: a button shows its view, switches to it, or — if it is the view already
   showing — closes the side bar, leaving the button marked so you can see what
   returns. `Ctrl+B` does the same. The gear toggles the settings page.
@@ -40,6 +43,12 @@ that powers VS Code) — with a **toggleable right-side chat panel** wired to
   shape, not five files named after their own contents, so the explorer, the search
   panel, `Ctrl+P`, Source Control and the chat all have something worth pointing at.
   See **The demo project** below for how it is stored.
+- **Folders** — **New Folder…** (the explorer's folder button, or `Ctrl+Alt+F`) makes a
+  directory, nested paths included (`src/a/b/c` creates all three), and refuses a path
+  that is already a file. A new folder shows up in the explorer **while it is still
+  empty** — the tree is built from file paths, so empty folders are remembered
+  separately — and when a real directory is open it is created on disk too, so it is
+  there the next time the folder is read.
 - **Real files** — *Open Folder* loads a directory from your machine via the File System
   Access API (Chrome/Edge) and `Ctrl+S` writes changes back to disk. Browsers without the
   picker fall back to `<input type="file">` / drag-and-drop, and an in-memory demo

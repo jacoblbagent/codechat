@@ -63,8 +63,15 @@ export class Workspace {
   rootName = DEMO_ROOT_NAME
   isRealDirectory = false
   files = new Map<string, WsFile>()
+  /** The open directory, when there is one, so folders can be created on disk. */
+  rootHandle: FileSystemDirectoryHandle | null = null
   /** Directories the user has collapsed in the explorer. */
   private collapsed = new Set<string>()
+  /**
+   * Directories that contain no files. The tree is derived from file paths, so
+   * without this a folder the user just made would vanish from it.
+   */
+  private emptyDirs = new Set<string>()
   private listeners: Array<() => void> = []
 
   /* ── events ───────────────────────────────────────────────── */
@@ -79,7 +86,9 @@ export class Workspace {
   loadDemo(): void {
     this.rootName = DEMO_ROOT_NAME
     this.isRealDirectory = false
+    this.rootHandle = null
     this.collapsed.clear()
+    this.emptyDirs.clear()
     this.files.clear()
     for (const f of DEMO_FILES) this.put(f.path, f.content)
     this.emit()
@@ -144,8 +153,10 @@ export class Workspace {
 
     this.files.clear()
     this.collapsed.clear()
+    this.emptyDirs.clear()
     this.rootName = dir.name || 'workspace'
     this.isRealDirectory = true
+    this.rootHandle = dir
 
     let opened = 0
     let skipped = 0
@@ -278,6 +289,48 @@ export class Workspace {
     this.emit()
   }
 
+  /**
+   * Make a directory.
+   *
+   * Two things make this more than a `mkdir` call. The tree is built from file
+   * paths, so an empty folder has to be remembered separately or it disappears
+   * the instant it is created; and when a real directory is open the folder is
+   * made on disk as well, so the next walk of the handle finds it.
+   */
+  async createFolder(path: string): Promise<'disk' | 'memory'> {
+    const normalised = path.replace(/^\/+|\/+$/g, '').trim()
+    if (!normalised) throw new Error('A folder name is required.')
+    if (this.files.has(normalised)) throw new Error(`${normalised} is already a file.`)
+    const prefix = `${normalised}/`
+    for (const existing of this.files.keys()) {
+      if (existing.startsWith(prefix)) throw new Error(`${normalised} already exists.`)
+    }
+
+    this.emptyDirs.add(normalised)
+    // Reveal the folder and every ancestor of it.
+    const parts = normalised.split('/')
+    let acc = ''
+    for (const part of parts) {
+      acc = acc ? `${acc}/${part}` : part
+      this.collapsed.delete(acc)
+    }
+
+    if (this.rootHandle) {
+      try {
+        let dir: any = this.rootHandle
+        for (const part of parts) dir = await dir.getDirectoryHandle(part, { create: true })
+        this.emit()
+        return 'disk'
+      } catch (err) {
+        this.emptyDirs.delete(normalised)
+        throw new Error(`Could not create the folder on disk: ${(err as Error).message}`)
+      }
+    }
+
+    this.emit()
+    return 'memory'
+  }
+
   toggleDir(path: string): void {
     if (this.collapsed.has(path)) this.collapsed.delete(path)
     else this.collapsed.add(path)
@@ -312,6 +365,24 @@ export class Workspace {
           }
           parent = dir
         }
+      }
+    }
+
+    // Folders with nothing in them yet — they have no file path to be derived
+    // from, so they are added by hand.
+    for (const dir of this.emptyDirs) {
+      const parts = dir.split('/')
+      let parent = root
+      let acc = ''
+      for (const name of parts) {
+        acc = acc ? `${acc}/${name}` : name
+        let node = dirIndex.get(acc)
+        if (!node) {
+          node = { name, path: acc, kind: 'dir', children: [] }
+          dirIndex.set(acc, node)
+          parent.children.push(node)
+        }
+        parent = node
       }
     }
 
