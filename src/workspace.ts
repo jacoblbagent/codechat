@@ -83,15 +83,24 @@ export class Workspace {
   }
 
   /* ── loading ──────────────────────────────────────────────── */
-  loadDemo(): void {
-    this.rootName = DEMO_ROOT_NAME
+  /**
+   * Load an in-memory file set as the workspace. The startup path builds both
+   * the bundled Flowboard fallback and the fetched Moto Pass starter through
+   * this one method, so the two behave identically downstream.
+   */
+  loadFiles(rootName: string, files: Array<{ path: string; content: string }>): void {
+    this.rootName = rootName
     this.isRealDirectory = false
     this.rootHandle = null
     this.collapsed.clear()
     this.emptyDirs.clear()
     this.files.clear()
-    for (const f of DEMO_FILES) this.put(f.path, f.content)
+    for (const f of files) this.put(f.path, f.content)
     this.emit()
+  }
+
+  loadDemo(): void {
+    this.loadFiles(DEMO_ROOT_NAME, DEMO_FILES)
   }
 
   /** True when the browser can open a real directory. */

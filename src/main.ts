@@ -1725,6 +1725,52 @@ async function reopenDirectory(handle: FileSystemDirectoryHandle): Promise<void>
 }
 
 /**
+ * The starter project — the Moto Pass source — lives as one static JSON file
+ * rather than a `?raw` import (see `scripts/build-starter.mjs`): the project is
+ * ~180 files and runs to a megabyte and a half, so importing it would put the
+ * whole tree in the IDE's own bundle, and copying it under `demo/` would fork a
+ * repository that changes daily. `npm run starter` rebuilds the file from
+ * `../moto-pass`.
+ *
+ * Flowboard, the bundled demo, is already on screen when this resolves, so a
+ * slow or missing file simply leaves that in place. A real directory always
+ * wins: it either opened before this finished, or it opens afterwards through
+ * `applyDirectory`, which replaces whatever is here.
+ */
+const STARTER_URL = `${import.meta.env.BASE_URL}starter/moto-pass.json`
+/** The file the starter opens on: the app's route table and page switch. */
+const STARTER_ENTRY = 'web/src/App.tsx'
+
+async function loadStarterProject(): Promise<void> {
+  try {
+    const res = await fetch(STARTER_URL)
+    if (!res.ok) return
+    const data = (await res.json()) as {
+      name?: string
+      files?: Array<{ path: string; content: string }>
+    }
+    if (!data.files?.length) return
+    if (workspace.isRealDirectory) return
+
+    workspace.loadFiles(data.name || 'moto-pass', data.files)
+    // Same reset `applyDirectory` performs, minus the session restore: the
+    // starter is a read-through, and its tabs are not remembered.
+    openTabs = []
+    activePath = null
+    editor.setModel(null)
+    els.welcome.classList.remove('is-hidden')
+    chat.setActiveFile()
+    renderTree()
+    renderTabs()
+
+    const entry = workspace.get(STARTER_ENTRY) ? STARTER_ENTRY : workspace.paths()[0]
+    if (entry) openFile(entry, true)
+  } catch {
+    /* No starter on this host — the bundled demo stands. */
+  }
+}
+
+/**
  * Put the folder from the last session back, when the browser allows it.
  *
  * A granted handle is reopened on the spot, with no prompt and no picker — that
@@ -2304,8 +2350,13 @@ if (!settings.apiKey) {
   toast('Add your OpenRouter API key in Settings to start chatting', 'info', 6000)
 }
 
-// Then, if a real folder was open last time, put it back over the demo — the
-// demo loads first so the IDE is usable immediately either way. See fs-handles.ts.
+// The starter project (Moto Pass) is fetched rather than bundled, so it lands a
+// moment after first paint and replaces the demo — unless a real folder is open
+// or reopens, which always wins. See loadStarterProject.
+void loadStarterProject()
+
+// Then, if a real folder was open last time, put it back over it — the starter
+// loads first so the IDE is usable immediately either way. See fs-handles.ts.
 void restoreLastFolder()
 
 window.addEventListener('resize', () => editor.layout())
