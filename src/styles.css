@@ -1072,6 +1072,33 @@ kbd {
 .palette-item.is-sel { background: var(--bg-selected); color: var(--on-selected); }
 .palette-item .p-dir { color: var(--fg-dim); font-size: 11px; margin-left: auto; }
 
+/* ── Host folder picker (dev server only) ──────────────────── */
+.host-picker { height: min(56vh, 460px); }
+.host-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--border-soft);
+}
+.host-title { font-size: 12px; color: var(--fg-bright); }
+.host-list { flex: 1; min-height: 0; }
+.host-row {
+  display: flex; align-items: center; gap: 7px;
+  padding: 4px 12px; cursor: pointer; font-size: 13px;
+}
+.host-row:hover { background: var(--hover-overlay); }
+.host-row.is-sel { background: var(--bg-selected); color: var(--on-selected); }
+.host-row .host-row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.host-empty { padding: 8px 12px; font-size: 12px; }
+.host-foot {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px 6px 12px; border-top: 1px solid var(--border-soft);
+}
+.host-hint {
+  flex: 1; min-width: 0; font-size: 11px; color: var(--fg-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.host-actions { display: flex; gap: 6px; }
+.host-actions .is-primary { color: var(--blue); border-color: var(--border-strong); }
+
 /* ── Toasts ────────────────────────────────────────────────── */
 .toast-wrap {
   position: fixed; right: 14px; bottom: 32px; z-index: 60;

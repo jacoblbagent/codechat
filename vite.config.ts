@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import { hostFs } from './host-fs-server'
 
 /**
  * `base` must match the GitHub Pages project path (https://<user>.github.io/codechat/).
@@ -6,6 +7,9 @@ import { defineConfig } from 'vite'
  */
 export default defineConfig({
   base: process.env.VITE_BASE ?? '/codechat/',
+  // Dev-only bridge to this machine's filesystem, so folders here can be
+  // opened by path (and over Tailscale, where the picker browses the client).
+  plugins: [hostFs()],
   build: {
     target: 'es2022',
     sourcemap: true,

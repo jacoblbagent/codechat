@@ -22,6 +22,19 @@ import { buildMonacoOptions, defaultCore, settingById, type SettingDef } from '.
 import { JSON_SETTINGS, SettingsJsonView } from './settings-json'
 import { SettingsPage } from './settings-ui'
 import { Workspace, type SearchHit, type WsFile } from './workspace'
+import {
+  forgetHostPath,
+  hostAvailable,
+  hostDirectoryHandle,
+  hostFileHandle,
+  hostInfo,
+  hostList,
+  hostTree,
+  joinPath,
+  lastHostPath,
+  rememberHostPath,
+  type HostEntry,
+} from './host-fs'
 
 /* ══════════════════════════════════════════════════════════════
    Settings + UI state (localStorage only — nothing leaves the browser)
@@ -187,6 +200,11 @@ const els = {
   quickOpen: $('quick-open'),
   quickInput: $<HTMLInputElement>('quick-input'),
   quickList: $('quick-list'),
+  hostOpen: $('host-open'),
+  hostPath: $<HTMLInputElement>('host-path'),
+  hostList: $('host-list'),
+  hostHint: $('host-hint'),
+  hostUp: $<HTMLButtonElement>('host-up'),
   toasts: $('toasts'),
   chatResizer: $('chat-resizer'),
   scrim: $('scrim'),
@@ -1801,6 +1819,7 @@ async function restoreLastFolder(): Promise<void> {
 
 /** Reopen the folder this browser last held, asking for permission if it lapsed. */
 async function reopenLastFolder(): Promise<void> {
+  if (await restoreHostFolder()) return
   const handle = await loadLastDirectory()
   if (!handle) {
     toast('No folder has been opened in this browser yet', 'info')
@@ -1828,7 +1847,152 @@ function pickFilesFallback(directory: boolean): void {
   input.click()
 }
 
-document.getElementById('btn-open-folder')?.addEventListener('click', () => void openFolder())
+/* ══════════════════════════════════════════════════════════════
+   Open Folder on Host (dev-server bridge)
+   ══════════════════════════════════════════════════════════════ */
+
+/**
+ * The browser's folder picker browses the machine the browser runs on, which is
+ * the wrong machine whenever CodeChat is opened from another computer. The dev
+ * server therefore exposes its own tree (host-fs-server.ts) and this dialog
+ * walks it by path. A static build has no endpoints, so the dialog reports
+ * itself unavailable and the picker stays the only route.
+ */
+let hostPath = ''
+let hostParent: string | null = null
+let hostEntries: HostEntry[] = []
+let hostSelected = ''
+
+function openHostModal(): boolean {
+  return !els.hostOpen.classList.contains('is-hidden')
+}
+
+async function openHostPicker(startAt?: string): Promise<void> {
+  const info = await hostInfo()
+  if (!info) {
+    toast('Host folders need the dev server — a static build can only use the picker', 'err')
+    return
+  }
+  els.hostOpen.classList.remove('is-hidden')
+  els.hostHint.textContent = `shared root: ${info.root}`
+  await browseHost(startAt || lastHostPath() || info.root)
+}
+
+function closeHostPicker(): void {
+  els.hostOpen.classList.add('is-hidden')
+}
+
+/** Read one folder on the host and list the folders inside it. */
+async function browseHost(target: string): Promise<void> {
+  const wanted = target.trim()
+  if (!wanted) return
+  try {
+    const listing = await hostList(wanted)
+    hostPath = listing.path
+    hostParent = listing.parent
+    hostEntries = listing.entries
+    hostSelected = ''
+  } catch (err) {
+    toast((err as Error).message, 'err')
+    return
+  }
+  els.hostPath.value = hostPath
+  els.hostUp.disabled = !hostParent
+  els.hostHint.textContent = `${hostEntries.length} folder${hostEntries.length === 1 ? '' : 's'}`
+  renderHostList()
+}
+
+function renderHostList(): void {
+  els.hostList.innerHTML = ''
+  if (!hostEntries.length) {
+    els.hostList.innerHTML = '<div class="host-row host-empty muted">No subfolders here</div>'
+    return
+  }
+  for (const entry of hostEntries) {
+    const row = document.createElement('div')
+    row.className = `host-row${entry.path === hostSelected ? ' is-sel' : ''}`
+    row.setAttribute('role', 'option')
+    row.dataset.path = entry.path
+    row.innerHTML = `${folderIcon(false)}<span class="host-row-name">${escapeHtml(entry.name)}</span>`
+    row.addEventListener('click', () => {
+      hostSelected = entry.path
+      renderHostList()
+    })
+    row.addEventListener('dblclick', () => void browseHost(entry.path))
+    els.hostList.appendChild(row)
+  }
+}
+
+/** Read the whole folder in one request and hand it to the workspace. */
+async function loadHostTree(path: string): Promise<{ opened: number; skipped: number }> {
+  const tree = await hostTree(path)
+  const files = tree.files.map((file) => ({
+    path: file.path,
+    content: file.content,
+    handle: hostFileHandle(joinPath(tree.root, file.path)),
+  }))
+  const result = workspace.openRealFiles(tree.name, hostDirectoryHandle(tree.root), files, tree.skipped)
+  rememberHostPath(tree.root)
+  return result
+}
+
+async function openHostFolder(path?: string): Promise<void> {
+  const target = path ?? (hostSelected || hostPath)
+  if (!target) return
+  try {
+    const { opened, skipped } = await loadHostTree(target)
+    closeHostPicker()
+    applyDirectory(opened, skipped, loadSession(workspace.rootName))
+  } catch (err) {
+    toast(`Could not open ${target}: ${(err as Error).message}`, 'err')
+  }
+}
+
+/**
+ * Put the host folder from the last session back. The path is in localStorage,
+ * so there is no permission to re-ask for and nothing to click — but a folder
+ * that has since gone is forgotten rather than offered again.
+ */
+async function restoreHostFolder(): Promise<boolean> {
+  const path = lastHostPath()
+  if (!path) return false
+  if (!(await hostAvailable())) return false
+  try {
+    const { opened, skipped } = await loadHostTree(path)
+    applyDirectory(opened, skipped, loadSession(workspace.rootName))
+    return true
+  } catch {
+    forgetHostPath()
+    return false
+  }
+}
+
+els.hostPath.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    void browseHost(els.hostPath.value)
+  } else if (e.key === 'Escape') {
+    e.preventDefault()
+    closeHostPicker()
+  }
+})
+document.getElementById('host-up')?.addEventListener('click', () => {
+  if (hostParent) void browseHost(hostParent)
+})
+document.getElementById('host-confirm')?.addEventListener('click', () => void openHostFolder())
+document.getElementById('host-cancel')?.addEventListener('click', closeHostPicker)
+els.hostOpen.addEventListener('click', (e) => {
+  if (e.target === els.hostOpen) closeHostPicker()
+})
+
+// One click should land on host folders: over Tailscale the OS picker would
+// browse the client machine, which is never what is wanted there.
+document.getElementById('btn-open-folder')?.addEventListener('click', () => {
+  void (async () => {
+    if (await hostAvailable()) await openHostPicker()
+    else await openFolder()
+  })()
+})
 /** Ask for a path and create a file in the workspace. */
 function newFile(): void {
   const name = window.prompt('New file path', 'untitled.ts')
@@ -1947,6 +2111,7 @@ async function saveActive(): Promise<void> {
 
 const commands: Record<string, () => void> = {
   'open-folder': () => void openFolder(),
+  'open-host-folder': () => void openHostPicker(),
   'reopen-folder': () => void reopenLastFolder(),
   'new-file': newFile,
   'new-folder': () => void newFolder(),
@@ -1984,8 +2149,21 @@ async function refreshFileMenu(): Promise<void> {
   const reopen = document.getElementById('menu-reopen') as HTMLButtonElement | null
   if (reopen) {
     const handle = await loadLastDirectory()
-    reopen.disabled = !handle
-    reopen.title = handle ? `Reopen ${handle.name}` : 'No folder has been opened in this browser yet'
+    const hostPath = lastHostPath()
+    reopen.disabled = !handle && !hostPath
+    reopen.title = handle
+      ? `Reopen ${handle.name}`
+      : hostPath
+        ? `Reopen ${hostPath}`
+        : 'No folder has been opened in this browser yet'
+  }
+  const hostItem = document.getElementById('menu-open-host') as HTMLButtonElement | null
+  if (hostItem) {
+    const available = await hostAvailable()
+    hostItem.disabled = !available
+    hostItem.title = available
+      ? 'Open a folder on the machine running the dev server'
+      : 'Only available when CodeChat is served by its dev server'
   }
   const changed = scmChangedFiles().length > 0
   for (const command of ['save', 'save-all']) {
@@ -2050,6 +2228,11 @@ window.addEventListener('keydown', (e) => {
     void openFolder()
     return
   }
+  if (mod && e.altKey && e.key.toLowerCase() === 'h') {
+    e.preventDefault()
+    void openHostPicker()
+    return
+  }
   if (mod && !e.shiftKey && e.key.toLowerCase() === 'p') {
     e.preventDefault()
     openQuickOpen()
@@ -2074,6 +2257,10 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (fileMenuOpen()) {
       setFileMenuOpen(false)
+      return
+    }
+    if (openHostModal()) {
+      closeHostPicker()
       return
     }
     if (!els.quickOpen.classList.contains('is-hidden')) {
@@ -2356,8 +2543,12 @@ if (!settings.apiKey) {
 void loadStarterProject()
 
 // Then, if a real folder was open last time, put it back over it — the starter
-// loads first so the IDE is usable immediately either way. See fs-handles.ts.
-void restoreLastFolder()
+// loads first so the IDE is usable immediately either way. A host-bridge folder
+// is remembered by path and wins over the picker's IndexedDB handle.
+void (async () => {
+  if (await restoreHostFolder()) return
+  await restoreLastFolder()
+})()
 
 window.addEventListener('resize', () => editor.layout())
 

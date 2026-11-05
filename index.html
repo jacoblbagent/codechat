@@ -115,6 +115,7 @@
                 <button class="menu-item" role="menuitem" data-command="new-folder">New Folder…<kbd>Ctrl+Alt+F</kbd></button>
                 <div class="menu-sep" role="separator"></div>
                 <button class="menu-item" role="menuitem" data-command="open-folder">Open Folder…<kbd>Ctrl+Alt+O</kbd></button>
+                <button class="menu-item" role="menuitem" data-command="open-host-folder" id="menu-open-host">Open Host Folder…<kbd>Ctrl+Alt+H</kbd></button>
                 <button class="menu-item" role="menuitem" data-command="reopen-folder" id="menu-reopen">Open Last Folder</button>
                 <div class="menu-sep" role="separator"></div>
                 <button class="menu-item" role="menuitem" data-command="save">Save<kbd>Ctrl+S</kbd></button>
@@ -421,6 +422,26 @@
       <div class="palette">
         <input id="quick-input" class="palette-input" placeholder="Search files by name…" aria-label="Quick open" />
         <div class="palette-list" id="quick-list" role="listbox"></div>
+      </div>
+    </div>
+
+    <!-- Open a folder on the machine running the dev server (host-fs-server.ts) -->
+    <div class="overlay is-hidden" id="host-open">
+      <div class="palette host-picker" role="dialog" aria-modal="true" aria-label="Open folder on host">
+        <div class="host-head">
+          <span class="host-title">Open Folder on Host</span>
+          <button class="mini-btn" id="host-up" type="button" title="Parent folder">Up</button>
+        </div>
+        <input id="host-path" class="palette-input" spellcheck="false" autocomplete="off"
+               placeholder="/home/user/Code/project" aria-label="Folder path" />
+        <div class="palette-list host-list" id="host-list" role="listbox" aria-label="Folders"></div>
+        <div class="host-foot">
+          <span class="host-hint" id="host-hint"></span>
+          <span class="host-actions">
+            <button class="mini-btn" id="host-cancel" type="button">Cancel</button>
+            <button class="mini-btn is-primary" id="host-confirm" type="button">Open</button>
+          </span>
+        </div>
       </div>
     </div>
 

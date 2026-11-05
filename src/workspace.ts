@@ -205,6 +205,28 @@ export class Workspace {
     return { handle: dir, opened, skipped }
   }
 
+  /**
+   * Load a directory whose contents were read elsewhere — the host bridge
+   * returns a whole tree in one request, so there is nothing to walk here. The
+   * handles still point at real files, so Ctrl+S writes to disk as usual.
+   */
+  openRealFiles(
+    name: string,
+    root: FileSystemDirectoryHandle | null,
+    files: Array<{ path: string; content: string; handle?: FileSystemFileHandle }>,
+    skipped = 0,
+  ): { opened: number; skipped: number } {
+    this.files.clear()
+    this.collapsed.clear()
+    this.emptyDirs.clear()
+    this.rootName = name || 'workspace'
+    this.isRealDirectory = true
+    this.rootHandle = root
+    for (const file of files) this.put(file.path, file.content, file.handle)
+    this.emit()
+    return { opened: files.length, skipped }
+  }
+
   /** Fallback for browsers without the picker: <input type=file> / drag-drop. */
   async addFiles(list: FileList | File[]): Promise<number> {
     const arr = Array.from(list)
