@@ -1021,10 +1021,191 @@ function renderTabs(): void {
       }
       openFile(path)
     })
+    // Right-click opens the tab's actions instead of the browser's page menu.
+    tab.addEventListener('contextmenu', (e) => {
+      e.preventDefault()
+      openTabMenu(path, e.clientX, e.clientY)
+    })
+    // Middle click closes, like every other tab bar.
+    tab.addEventListener('auxclick', (e) => {
+      if (e.button === 1) {
+        e.preventDefault()
+        closeTab(path)
+      }
+    })
     els.tabs.appendChild(tab)
   }
   scheduleSaveSession()
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Tab context menu
+   ══════════════════════════════════════════════════════════════ */
+
+type TabMenuEntry =
+  | { sep: true }
+  | {
+      sep?: false
+      label: string
+      shortcut?: string
+      title?: string
+      disabled?: boolean
+      run: () => void
+    }
+
+const tabMenu = document.createElement('div')
+tabMenu.className = 'tab-menu is-hidden'
+tabMenu.setAttribute('role', 'menu')
+tabMenu.setAttribute('aria-label', 'Tab actions')
+document.body.appendChild(tabMenu)
+
+/**
+ * A file's location on disk. Only the dev-server bridge knows a real root, and
+ * a folder picked in the browser never says where it lives, so anything else
+ * falls back to the workspace name in front of the relative path.
+ */
+function absolutePathFor(path: string): string {
+  if (import.meta.env.DEV) {
+    const root = hostRootOf(workspace.rootHandle)
+    if (root) return joinPath(root, path)
+  }
+  return `${workspace.rootName}/${path}`
+}
+
+function copyToClipboard(text: string, message: string): void {
+  void navigator.clipboard.writeText(text).then(
+    () => toast(message, 'ok'),
+    () => toast('Clipboard unavailable', 'err'),
+  )
+}
+
+/** Close every tab but one — the menu's tab, or all of them when null. */
+function closeTabsExcept(keep: string | null): void {
+  for (const path of [...openTabs]) if (path !== keep) closeTab(path)
+  if (keep && openTabs.includes(keep)) openFile(keep)
+}
+
+function tabMenuEntries(path: string): TabMenuEntry[] {
+  const absolute = absolutePathFor(path)
+  return [
+    { label: 'Close', shortcut: 'Ctrl+W', run: () => closeTab(path) },
+    { label: 'Close Others', disabled: openTabs.length < 2, run: () => closeTabsExcept(path) },
+    { label: 'Close All', run: () => closeTabsExcept(null) },
+    { sep: true },
+    {
+      label: 'Save',
+      shortcut: 'Ctrl+S',
+      disabled: !workspace.isDirty(path),
+      run: () => {
+        void savePath(path).then(
+          (where) => {
+            renderTabs()
+            renderTree()
+            renderScm()
+            toast(where === 'disk' ? `Saved ${path} to disk` : `Saved ${path} (in-memory workspace)`, 'ok')
+          },
+          (err: Error) => toast(`Save failed: ${err.message}`, 'err'),
+        )
+      },
+    },
+    { sep: true },
+    {
+      label: 'Copy Path',
+      title: absolute,
+      run: () => copyToClipboard(absolute, `Copied ${absolute}`),
+    },
+    {
+      label: 'Copy Relative Path',
+      title: path,
+      run: () => copyToClipboard(path, `Copied ${path}`),
+    },
+    { sep: true },
+    {
+      label: 'Reveal in Explorer',
+      run: () => {
+        workspace.reveal(path)
+        renderTree()
+      },
+    },
+  ]
+}
+
+function renderTabMenu(path: string): void {
+  tabMenu.innerHTML = ''
+  for (const entry of tabMenuEntries(path)) {
+    if (entry.sep) {
+      const sep = document.createElement('div')
+      sep.className = 'menu-sep'
+      sep.setAttribute('role', 'separator')
+      tabMenu.appendChild(sep)
+      continue
+    }
+    const item = document.createElement('button')
+    item.type = 'button'
+    item.className = 'menu-item'
+    item.setAttribute('role', 'menuitem')
+    item.disabled = !!entry.disabled
+    if (entry.title) item.title = entry.title
+    item.innerHTML = escapeHtml(entry.label) + (entry.shortcut ? `<kbd>${entry.shortcut}</kbd>` : '')
+    item.addEventListener('click', () => {
+      hideTabMenu()
+      entry.run()
+    })
+    tabMenu.appendChild(item)
+  }
+}
+
+function openTabMenu(path: string, x: number, y: number): void {
+  renderTabMenu(path)
+  tabMenu.classList.remove('is-hidden')
+  // Measure after showing, then keep the whole menu on screen: a tab at the far
+  // right, or a click near the bottom edge, must not push it out of view.
+  const rect = tabMenu.getBoundingClientRect()
+  const left = Math.max(6, Math.min(x, window.innerWidth - rect.width - 6))
+  const top = Math.max(6, Math.min(y, window.innerHeight - rect.height - 6))
+  tabMenu.style.left = `${left}px`
+  tabMenu.style.top = `${top}px`
+  tabMenu.querySelector<HTMLButtonElement>('.menu-item:not(:disabled)')?.focus()
+}
+
+function hideTabMenu(): void {
+  tabMenu.classList.add('is-hidden')
+}
+
+function tabMenuOpen(): boolean {
+  return !tabMenu.classList.contains('is-hidden')
+}
+
+document.addEventListener(
+  'pointerdown',
+  (e) => {
+    if (tabMenuOpen() && !tabMenu.contains(e.target as Node)) hideTabMenu()
+  },
+  true,
+)
+
+window.addEventListener('resize', hideTabMenu)
+window.addEventListener('blur', hideTabMenu)
+
+// This listener sits on document, so it runs before the app-wide handler on
+// window: Escape closes the menu alone, and the arrows walk it.
+document.addEventListener('keydown', (e) => {
+  if (!tabMenuOpen()) return
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    e.stopPropagation()
+    hideTabMenu()
+    return
+  }
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+  e.preventDefault()
+  e.stopPropagation()
+  const items = [...tabMenu.querySelectorAll<HTMLButtonElement>('.menu-item:not(:disabled)')]
+  if (!items.length) return
+  const at = items.indexOf(document.activeElement as HTMLButtonElement)
+  const step = e.key === 'ArrowDown' ? 1 : -1
+  items[(at + step + items.length) % items.length].focus()
+})
 
 /* ══════════════════════════════════════════════════════════════
    Explorer tree
