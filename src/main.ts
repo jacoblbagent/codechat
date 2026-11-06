@@ -1163,6 +1163,8 @@ function openMenu(entries: MenuEntry[], label: string, x: number, y: number): vo
 
 function hideMenu(): void {
   popupMenu.classList.add('is-hidden')
+  // The row highlight only exists while its menu is open.
+  document.querySelectorAll('.row.is-ctx').forEach((row) => row.classList.remove('is-ctx'))
 }
 
 function menuOpen(): boolean {
@@ -1271,6 +1273,24 @@ function renderTree(): void {
     return
   }
 
+  // Right-clicking a row selects it the way VS Code does, so it is obvious
+  // which row the menu belongs to. hideMenu() clears the highlight.
+  const markRow = (row: HTMLElement): void => {
+    els.tree.querySelectorAll('.row.is-ctx').forEach((r) => r.classList.remove('is-ctx'))
+    row.classList.add('is-ctx')
+  }
+
+  // The keyboard route to the same menu: Shift+F10 or the ContextMenu key,
+  // positioned under the focused row instead of at a pointer.
+  const menuKey = (e: KeyboardEvent, row: HTMLElement, path: string, kind: 'dir' | 'file'): boolean => {
+    if (e.key !== 'ContextMenu' && !(e.shiftKey && e.key === 'F10')) return false
+    e.preventDefault()
+    markRow(row)
+    const rect = row.getBoundingClientRect()
+    openTreeMenu(path, kind, rect.left + 18, rect.bottom - 2)
+    return true
+  }
+
   const build = (list: typeof nodes, depth: number, container: HTMLElement): void => {
     for (const node of list) {
       const row = document.createElement('div')
@@ -1289,6 +1309,7 @@ function renderTree(): void {
           `<span class="name">${escapeHtml(node.name)}</span>`
         row.addEventListener('click', () => workspace.toggleDir(node.path))
         row.addEventListener('keydown', (e) => {
+          if (menuKey(e, row, node.path, 'dir')) return
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
             workspace.toggleDir(node.path)
@@ -1296,6 +1317,7 @@ function renderTree(): void {
         })
         row.addEventListener('contextmenu', (e) => {
           e.preventDefault()
+          markRow(row)
           openTreeMenu(node.path, 'dir', e.clientX, e.clientY)
         })
         container.appendChild(row)
@@ -1311,6 +1333,7 @@ function renderTree(): void {
         if (file?.binary) row.style.opacity = '0.55'
         row.addEventListener('click', () => openFile(node.path))
         row.addEventListener('keydown', (e) => {
+          if (menuKey(e, row, node.path, 'file')) return
           if (e.key === 'Enter') {
             e.preventDefault()
             openFile(node.path)
@@ -1318,6 +1341,7 @@ function renderTree(): void {
         })
         row.addEventListener('contextmenu', (e) => {
           e.preventDefault()
+          markRow(row)
           openTreeMenu(node.path, 'file', e.clientX, e.clientY)
         })
         container.appendChild(row)

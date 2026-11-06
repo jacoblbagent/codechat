@@ -411,6 +411,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .row:hover { background: var(--bg-hover); }
 .row.is-active { background: var(--bg-active); }
+/* Row whose context menu is open — the VS Code "this is the target" grey. */
+.row.is-ctx { background: var(--bg-active); }
 .row:focus-visible { outline: 1px solid var(--blue); outline-offset: -1px; }
 .row .twisty {
   width: 14px; flex: none; color: var(--fg-dim);
