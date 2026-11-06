@@ -1119,6 +1119,13 @@ function tabMenuEntries(path: string): MenuEntry[] {
         renderTree()
       },
     },
+    { sep: true },
+    {
+      label: 'Delete File…',
+      title: workspace.rootHandle ? `Delete ${absolute}` : 'Open a folder to delete files',
+      disabled: !workspace.rootHandle,
+      run: () => deleteFromMenu(path),
+    },
   ]
 }
 
@@ -1173,6 +1180,88 @@ function menuOpen(): boolean {
 
 function openTabMenu(path: string, x: number, y: number): void {
   openMenu(tabMenuEntries(path), 'Tab actions', x, y)
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Delete confirmation
+   ══════════════════════════════════════════════════════════════ */
+
+/**
+ * Ask before removing a file; resolve true only if Delete was pressed.
+ *
+ * Styled overlay rather than `window.confirm`: the browser's modal cannot name
+ * the file it is about to destroy, and every dismissal route here (Escape,
+ * Cancel, the backdrop, focus leaving) answers no — removing a file takes a
+ * deliberate click on the one button that says Delete.
+ */
+function confirmDelete(path: string, onDisk: boolean): Promise<boolean> {
+  return new Promise((resolve) => {
+    const returnFocus = document.activeElement as HTMLElement | null
+    const overlay = document.createElement('div')
+    overlay.className = 'overlay'
+    overlay.innerHTML =
+      '<div class="palette confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">' +
+      '<div class="confirm-head" id="confirm-title">Delete this file?</div>' +
+      '<div class="confirm-body">' +
+      '<code class="confirm-path"></code>' +
+      '<p class="confirm-note"></p>' +
+      '</div>' +
+      '<div class="confirm-foot">' +
+      '<button class="mini-btn" type="button" data-answer="no">Cancel</button>' +
+      '<button class="mini-btn is-danger" type="button" data-answer="yes">Delete</button>' +
+      '</div>' +
+      '</div>'
+    overlay.querySelector('.confirm-path')!.textContent = path
+    overlay.querySelector('.confirm-note')!.textContent = onDisk
+      ? 'The file is removed from disk. This cannot be undone.'
+      : 'The file leaves this session only — nothing is written to disk.'
+
+    let settled = false
+    const finish = (answer: boolean): void => {
+      if (settled) return
+      settled = true
+      overlay.remove()
+      returnFocus?.focus()
+      resolve(answer)
+    }
+
+    overlay.addEventListener('click', (e) => {
+      const button = (e.target as HTMLElement).closest<HTMLElement>('[data-answer]')
+      if (button) finish(button.dataset.answer === 'yes')
+      // A click on the backdrop answers no; a click inside the dialog does not.
+      else if (e.target === overlay) finish(false)
+    })
+    // Escape has to stop here: the app-wide window handler would also see it.
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
+      finish(false)
+    })
+
+    document.body.appendChild(overlay)
+    overlay.querySelector<HTMLButtonElement>('[data-answer="no"]')?.focus()
+  })
+}
+
+/** Delete a file from the workspace, on the far side of that confirmation. */
+function deleteFromMenu(path: string): void {
+  const onDisk = !!workspace.rootHandle
+  void confirmDelete(path, onDisk).then((confirmed) => {
+    if (!confirmed) return
+    void workspace.delete(path).then(
+      (where) => {
+        // The workspace emits on delete, but the tab list is ours to fix: a
+        // closed tab also disposes its Monaco model.
+        closeTab(path)
+        renderTabs()
+        renderTree()
+        renderScm()
+        toast(where === 'disk' ? `Deleted ${path}` : `Removed ${path} from the workspace`, 'ok')
+      },
+      (err: Error) => toast(err.message, 'err'),
+    )
+  })
 }
 
 document.addEventListener(
@@ -1253,6 +1342,13 @@ function treeMenuEntries(node: { path: string; kind: 'dir' | 'file' }): MenuEntr
         workspace.reveal(node.path)
         renderTree()
       },
+    },
+    { sep: true },
+    {
+      label: 'Delete File…',
+      title: workspace.rootHandle ? `Delete ${absolute}` : 'Open a folder to delete files',
+      disabled: !workspace.rootHandle,
+      run: () => deleteFromMenu(node.path),
     },
   ]
 }

@@ -247,6 +247,20 @@ async function route(
       return true
     }
 
+    // Deleting a file only. A folder goes through the browser's own handle when
+    // one exists; a recursive rm from here would be too easy to aim badly.
+    case 'delete': {
+      if (req.method !== 'POST') throw Object.assign(new Error('POST required'), { status: 405 })
+      const body = await readBody(req)
+      const file = confine(root, String(body.path ?? ''))
+      if (file === root) throw Object.assign(new Error('Refusing to delete the root'), { status: 400 })
+      const info = await fsp.stat(file)
+      if (info.isDirectory()) throw Object.assign(new Error('Only files can be deleted'), { status: 400 })
+      await fsp.unlink(file)
+      send(res, 200, { path: file })
+      return true
+    }
+
     default:
       return false
   }

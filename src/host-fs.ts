@@ -179,8 +179,10 @@ class HostDirectoryHandle {
     return new HostFileHandle(joinPath(this.path, name))
   }
 
+  // Only files: the bridge's `delete` route refuses folders, and the workspace
+  // never asks it to remove one.
   async removeEntry(name: string): Promise<void> {
-    throw new Error(`Deleting ${name} is not supported by the host bridge`)
+    await post('delete', { path: joinPath(this.path, name) })
   }
 }
 

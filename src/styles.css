@@ -1087,6 +1087,32 @@ kbd {
 .palette-item.is-sel { background: var(--bg-selected); color: var(--on-selected); }
 .palette-item .p-dir { color: var(--fg-dim); font-size: 11px; margin-left: auto; }
 
+/* ── Delete confirmation ───────────────────────────────────── */
+/* Same overlay/palette shell as the quick-open list, so the dialog belongs to
+   the app rather than to the browser. Narrow, and it opens at the top of the
+   screen like the palettes do. */
+.confirm-dialog { width: 400px; max-height: none; }
+.confirm-head {
+  padding: 10px 14px; font-size: 12px; color: var(--fg-bright);
+  border-bottom: 1px solid var(--border-soft);
+}
+.confirm-body { padding: 12px 14px; }
+.confirm-path {
+  display: block; padding: 6px 8px; overflow-wrap: anywhere;
+  background: var(--bg); border: 1px solid var(--border-soft); border-radius: 3px;
+  color: var(--fg); font: 12px var(--mono);
+}
+.confirm-note { margin: 10px 0 0; font-size: 12px; color: var(--fg-dim); line-height: 1.45; }
+.confirm-foot {
+  display: flex; justify-content: flex-end; gap: 6px;
+  padding: 8px 12px; border-top: 1px solid var(--border-soft);
+}
+.confirm-foot .mini-btn { height: 24px; padding: 0 10px; border: 1px solid var(--border-strong); }
+.confirm-foot .mini-btn:hover { background: var(--hover-overlay-strong); }
+.confirm-foot .mini-btn.is-danger { color: var(--red); border-color: var(--red); }
+.confirm-foot .mini-btn.is-danger:hover { background: var(--red-soft); }
+.confirm-foot .mini-btn:focus-visible { outline: 1px solid var(--blue); outline-offset: 1px; }
+
 /* ── Toasts ────────────────────────────────────────────────── */
 .toast-wrap {
   position: fixed; right: 14px; bottom: 32px; z-index: 60;

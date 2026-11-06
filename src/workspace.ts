@@ -395,6 +395,36 @@ export class Workspace {
     return 'memory'
   }
 
+  /**
+   * Delete a file from the workspace and, when a real folder is open, from
+   * disk.
+   *
+   * The delete has to go through the *parent* directory handle — a file handle
+   * has no `remove` — so the path is walked from the root one segment at a
+   * time. Both handle kinds answer that: a picked folder returns real
+   * sub-handles, and the host bridge's fake one turns the walk into `/api`
+   * calls. An in-memory workspace forgets the file and nothing else.
+   */
+  async delete(path: string): Promise<'disk' | 'memory'> {
+    if (!this.files.has(path)) throw new Error(`${path} is not in the workspace`)
+    let where: 'disk' | 'memory' = 'memory'
+    if (this.rootHandle) {
+      const parts = path.split('/')
+      const name = parts.pop() as string
+      try {
+        let dir: any = this.rootHandle
+        for (const part of parts) dir = await dir.getDirectoryHandle(part)
+        await dir.removeEntry(name)
+        where = 'disk'
+      } catch (err) {
+        throw new Error(`Could not delete ${path}: ${(err as Error).message}`)
+      }
+    }
+    this.files.delete(path)
+    this.emit()
+    return where
+  }
+
   create(path: string, content = ''): void {
     const normalised = path.replace(/^\/+/, '').trim()
     if (!normalised) throw new Error('A file name is required.')
