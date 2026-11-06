@@ -7,8 +7,11 @@
  * `FileSystemDirectoryHandle` / `FileSystemFileHandle` the workspace actually
  * uses, which is what lets `Workspace` save through them with no extra code.
  *
- * In a static build the endpoints answer 404 and `hostAvailable()` is false, so
- * the picker stays the only route and nothing else changes.
+ * The bridge only exists while the dev server runs it. `BRIDGE` is folded to
+ * `false` by a build, so the bundler drops the fetch, the route string and every
+ * caller: a static deploy carries no filesystem code at all, not merely a
+ * switched-off button. See scripts/assert-static-clean.mjs, which fails the
+ * build if any of it survives.
  */
 
 export interface HostEntry {
@@ -30,11 +33,13 @@ export interface HostTree {
 }
 
 const BASE = ((import.meta.env.BASE_URL as string) ?? '/').replace(/\/+$/, '')
-const API = `${BASE}/api/host`
+/** Build-time flag: true on the dev server, false in anything built for static hosting. */
+const BRIDGE = import.meta.env.DEV
 const LAST_KEY = 'codechat.host.v1'
 
 async function request<T>(route: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}/${route}`, init)
+  if (!BRIDGE) throw new Error('Host folders are only available from the dev server')
+  const res = await fetch(`${BASE}/api/host/${route}`, init)
   if (!res.ok) {
     let message = res.statusText || `HTTP ${res.status}`
     try {
@@ -67,6 +72,7 @@ let infoPromise: Promise<HostInfo | null> | null = null
 
 /** The host root, or null when this build has no bridge (static deploy). */
 export function hostInfo(): Promise<HostInfo | null> {
+  if (!BRIDGE) return Promise.resolve(null)
   if (!infoPromise) {
     infoPromise = request<HostInfo>('info').catch(() => {
       infoPromise = null
@@ -124,7 +130,8 @@ class HostFileHandle {
   }
 
   async getFile(): Promise<File> {
-    const res = await fetch(`${API}/read?path=${encodeURIComponent(this.path)}`)
+    if (!BRIDGE) throw new Error('Host folders are only available from the dev server')
+    const res = await fetch(`${BASE}/api/host/read?path=${encodeURIComponent(this.path)}`)
     if (!res.ok) throw new Error(`Could not read ${this.name}`)
     return new File([await res.text()], this.name, { type: 'text/plain' })
   }

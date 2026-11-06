@@ -35,6 +35,7 @@ import {
   rememberHostPath,
   type HostEntry,
 } from './host-fs'
+import { installHostUi } from './host-ui'
 
 /* ══════════════════════════════════════════════════════════════
    Settings + UI state (localStorage only — nothing leaves the browser)
@@ -188,6 +189,26 @@ function saveUi(u: UiState): void {
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T =>
   document.getElementById(id) as T
 
+/**
+ * The picker's elements, looked up on demand. They only exist when host-ui.ts
+ * injected the markup, and a function (rather than a constant) is what lets a
+ * build drop these ids along with the rest of the bridge.
+ */
+function hostEls() {
+  return {
+    open: $('host-open'),
+    path: $<HTMLInputElement>('host-path'),
+    list: $('host-list'),
+    hint: $('host-hint'),
+    up: $<HTMLButtonElement>('host-up'),
+  }
+}
+
+/* The host-folder picker belongs to the dev server, not to the app: its markup
+   is injected here so index.html carries none of it, and the whole feature folds
+   out of a static build (see host-ui.ts / host-fs.ts). */
+if (import.meta.env.DEV) installHostUi()
+
 const els = {
   body: document.querySelector('.body') as HTMLElement,
   tree: $('tree'),
@@ -200,11 +221,6 @@ const els = {
   quickOpen: $('quick-open'),
   quickInput: $<HTMLInputElement>('quick-input'),
   quickList: $('quick-list'),
-  hostOpen: $('host-open'),
-  hostPath: $<HTMLInputElement>('host-path'),
-  hostList: $('host-list'),
-  hostHint: $('host-hint'),
-  hostUp: $<HTMLButtonElement>('host-up'),
   toasts: $('toasts'),
   chatResizer: $('chat-resizer'),
   scrim: $('scrim'),
@@ -915,7 +931,7 @@ function scheduleSaveSession(): void {
    Tabs
    ══════════════════════════════════════════════════════════════ */
 
-function openFile(path: string, keepFocus = false): void {
+function openFile(path: string, keepFocus = false, revealInTree = true): void {
   // Opening a file always leaves the settings overlays — and on a narrow
   // screen it dismisses the drawer they were tapped from, or the editor it
   // just opened would be sitting behind it.
@@ -934,6 +950,10 @@ function openFile(path: string, keepFocus = false): void {
 
   if (!openTabs.includes(path)) openTabs.push(path)
   activePath = path
+
+  // Folders start collapsed, so show the one the opened file lives in — unless
+  // the caller asked for the tree to stay as it is (boot loads).
+  if (revealInTree) workspace.reveal(path)
 
   const model = modelFor(path, file.content)
   if (model.getValue() !== file.content) model.setValue(file.content)
@@ -1692,13 +1712,13 @@ function applyDirectory(opened: number, skipped: number, session: Session | null
   if (remembered.length) {
     // Opening each in turn rebuilds the tab strip in its old order; the active
     // file is opened last so it is the one in front.
-    for (const path of remembered) openFile(path, true)
+    for (const path of remembered) openFile(path, true, false)
     const active = session?.active && remembered.includes(session.active) ? session.active : remembered[0]
-    openFile(active, true)
+    openFile(active, true, false)
     return
   }
   const first = workspace.paths()[0]
-  if (first) openFile(first, true)
+  if (first) openFile(first, true, false)
 }
 
 /** Open the picker and show the folder the user chooses. */
@@ -1782,7 +1802,7 @@ async function loadStarterProject(): Promise<void> {
     renderTabs()
 
     const entry = workspace.get(STARTER_ENTRY) ? STARTER_ENTRY : workspace.paths()[0]
-    if (entry) openFile(entry, true)
+    if (entry) openFile(entry, true, false)
   } catch {
     /* No starter on this host — the bundled demo stands. */
   }
@@ -1819,7 +1839,9 @@ async function restoreLastFolder(): Promise<void> {
 
 /** Reopen the folder this browser last held, asking for permission if it lapsed. */
 async function reopenLastFolder(): Promise<void> {
-  if (await restoreHostFolder()) return
+  if (import.meta.env.DEV) {
+    if (await restoreHostFolder()) return
+  }
   const handle = await loadLastDirectory()
   if (!handle) {
     toast('No folder has been opened in this browser yet', 'info')
@@ -1842,7 +1864,7 @@ function pickFilesFallback(directory: boolean): void {
     renderTree()
     toast(`Added ${n} file${n === 1 ? '' : 's'} to the workspace`, 'ok')
     const first = workspace.paths()[0]
-    if (first) openFile(first, true)
+    if (first) openFile(first, true, false)
   })
   input.click()
 }
@@ -1864,7 +1886,7 @@ let hostEntries: HostEntry[] = []
 let hostSelected = ''
 
 function openHostModal(): boolean {
-  return !els.hostOpen.classList.contains('is-hidden')
+  return !hostEls().open.classList.contains('is-hidden')
 }
 
 async function openHostPicker(startAt?: string): Promise<void> {
@@ -1873,13 +1895,13 @@ async function openHostPicker(startAt?: string): Promise<void> {
     toast('Host folders need the dev server — a static build can only use the picker', 'err')
     return
   }
-  els.hostOpen.classList.remove('is-hidden')
-  els.hostHint.textContent = `shared root: ${info.root}`
+  hostEls().open.classList.remove('is-hidden')
+  hostEls().hint.textContent = `shared root: ${info.root}`
   await browseHost(startAt || lastHostPath() || info.root)
 }
 
 function closeHostPicker(): void {
-  els.hostOpen.classList.add('is-hidden')
+  hostEls().open.classList.add('is-hidden')
 }
 
 /** Read one folder on the host and list the folders inside it. */
@@ -1896,16 +1918,16 @@ async function browseHost(target: string): Promise<void> {
     toast((err as Error).message, 'err')
     return
   }
-  els.hostPath.value = hostPath
-  els.hostUp.disabled = !hostParent
-  els.hostHint.textContent = `${hostEntries.length} folder${hostEntries.length === 1 ? '' : 's'}`
+  hostEls().path.value = hostPath
+  hostEls().up.disabled = !hostParent
+  hostEls().hint.textContent = `${hostEntries.length} folder${hostEntries.length === 1 ? '' : 's'}`
   renderHostList()
 }
 
 function renderHostList(): void {
-  els.hostList.innerHTML = ''
+  hostEls().list.innerHTML = ''
   if (!hostEntries.length) {
-    els.hostList.innerHTML = '<div class="host-row host-empty muted">No subfolders here</div>'
+    hostEls().list.innerHTML = '<div class="host-row host-empty muted">No subfolders here</div>'
     return
   }
   for (const entry of hostEntries) {
@@ -1919,7 +1941,7 @@ function renderHostList(): void {
       renderHostList()
     })
     row.addEventListener('dblclick', () => void browseHost(entry.path))
-    els.hostList.appendChild(row)
+    hostEls().list.appendChild(row)
   }
 }
 
@@ -1967,30 +1989,39 @@ async function restoreHostFolder(): Promise<boolean> {
   }
 }
 
-els.hostPath.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault()
-    void browseHost(els.hostPath.value)
-  } else if (e.key === 'Escape') {
-    e.preventDefault()
-    closeHostPicker()
-  }
-})
-document.getElementById('host-up')?.addEventListener('click', () => {
-  if (hostParent) void browseHost(hostParent)
-})
-document.getElementById('host-confirm')?.addEventListener('click', () => void openHostFolder())
-document.getElementById('host-cancel')?.addEventListener('click', closeHostPicker)
-els.hostOpen.addEventListener('click', (e) => {
-  if (e.target === els.hostOpen) closeHostPicker()
-})
+// Wired only when the dev server is behind the page. In a build this whole block
+// is dead, and with it every picker function and the host-fs module.
+if (import.meta.env.DEV) {
+  hostEls().path.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      void browseHost(hostEls().path.value)
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      closeHostPicker()
+    }
+  })
+  document.getElementById('host-up')?.addEventListener('click', () => {
+    if (hostParent) void browseHost(hostParent)
+  })
+  document.getElementById('host-confirm')?.addEventListener('click', () => void openHostFolder())
+  document.getElementById('host-cancel')?.addEventListener('click', closeHostPicker)
+  hostEls().open.addEventListener('click', (e) => {
+    if (e.target === hostEls().open) closeHostPicker()
+  })
+}
 
 // One click should land on host folders: over Tailscale the OS picker would
 // browse the client machine, which is never what is wanted there.
 document.getElementById('btn-open-folder')?.addEventListener('click', () => {
   void (async () => {
-    if (await hostAvailable()) await openHostPicker()
-    else await openFolder()
+    if (import.meta.env.DEV) {
+      if (await hostAvailable()) {
+        await openHostPicker()
+        return
+      }
+    }
+    await openFolder()
   })()
 })
 /** Ask for a path and create a file in the workspace. */
@@ -2028,15 +2059,7 @@ async function newFolder(): Promise<void> {
 document.getElementById('btn-new-file')?.addEventListener('click', newFile)
 document.getElementById('btn-new-folder')?.addEventListener('click', () => void newFolder())
 document.getElementById('btn-collapse')?.addEventListener('click', () => {
-  for (const path of workspace.paths()) {
-    const parts = path.split('/')
-    parts.pop()
-    let acc = ''
-    for (const p of parts) {
-      acc = acc ? `${acc}/${p}` : p
-      if (!workspace.isCollapsed(acc)) workspace.toggleDir(acc)
-    }
-  }
+  workspace.collapseAll()
 })
 
 window.addEventListener('dragover', (e) => e.preventDefault())
@@ -2111,7 +2134,8 @@ async function saveActive(): Promise<void> {
 
 const commands: Record<string, () => void> = {
   'open-folder': () => void openFolder(),
-  'open-host-folder': () => void openHostPicker(),
+  // Dev only — the menu entry that fires it does not exist in a static build.
+  ...(import.meta.env.DEV ? { 'open-host-folder': () => void openHostPicker() } : {}),
   'reopen-folder': () => void reopenLastFolder(),
   'new-file': newFile,
   'new-folder': () => void newFolder(),
@@ -2149,7 +2173,10 @@ async function refreshFileMenu(): Promise<void> {
   const reopen = document.getElementById('menu-reopen') as HTMLButtonElement | null
   if (reopen) {
     const handle = await loadLastDirectory()
-    const hostPath = lastHostPath()
+    // A dev server can also reopen a folder by path; a static build has only the
+    // browser's own handle, so this half folds out.
+    let hostPath = ''
+    if (import.meta.env.DEV) hostPath = lastHostPath()
     reopen.disabled = !handle && !hostPath
     reopen.title = handle
       ? `Reopen ${handle.name}`
@@ -2157,13 +2184,15 @@ async function refreshFileMenu(): Promise<void> {
         ? `Reopen ${hostPath}`
         : 'No folder has been opened in this browser yet'
   }
-  const hostItem = document.getElementById('menu-open-host') as HTMLButtonElement | null
-  if (hostItem) {
-    const available = await hostAvailable()
-    hostItem.disabled = !available
-    hostItem.title = available
-      ? 'Open a folder on the machine running the dev server'
-      : 'Only available when CodeChat is served by its dev server'
+  if (import.meta.env.DEV) {
+    const hostItem = document.getElementById('menu-open-host') as HTMLButtonElement | null
+    if (hostItem) {
+      const available = await hostAvailable()
+      hostItem.disabled = !available
+      hostItem.title = available
+        ? 'Open a folder on the machine running the dev server'
+        : 'Only available when CodeChat is served by its dev server'
+    }
   }
   const changed = scmChangedFiles().length > 0
   for (const command of ['save', 'save-all']) {
@@ -2228,10 +2257,12 @@ window.addEventListener('keydown', (e) => {
     void openFolder()
     return
   }
-  if (mod && e.altKey && e.key.toLowerCase() === 'h') {
-    e.preventDefault()
-    void openHostPicker()
-    return
+  if (import.meta.env.DEV) {
+    if (mod && e.altKey && e.key.toLowerCase() === 'h') {
+      e.preventDefault()
+      void openHostPicker()
+      return
+    }
   }
   if (mod && !e.shiftKey && e.key.toLowerCase() === 'p') {
     e.preventDefault()
@@ -2259,9 +2290,11 @@ window.addEventListener('keydown', (e) => {
       setFileMenuOpen(false)
       return
     }
-    if (openHostModal()) {
-      closeHostPicker()
-      return
+    if (import.meta.env.DEV) {
+      if (openHostModal()) {
+        closeHostPicker()
+        return
+      }
     }
     if (!els.quickOpen.classList.contains('is-hidden')) {
       closeQuickOpen()
@@ -2531,7 +2564,7 @@ setChatStatus(settings.apiKey ? 'ready' : 'idle')
 setView('explorer')
 
 // Open the first demo file so the editor and chat context are live on load.
-openFile('src/App.tsx', true)
+openFile('src/App.tsx', true, false)
 
 if (!settings.apiKey) {
   toast('Add your OpenRouter API key in Settings to start chatting', 'info', 6000)
@@ -2546,7 +2579,9 @@ void loadStarterProject()
 // loads first so the IDE is usable immediately either way. A host-bridge folder
 // is remembered by path and wins over the picker's IndexedDB handle.
 void (async () => {
-  if (await restoreHostFolder()) return
+  if (import.meta.env.DEV) {
+    if (await restoreHostFolder()) return
+  }
   await restoreLastFolder()
 })()
 

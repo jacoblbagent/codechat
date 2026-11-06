@@ -8,11 +8,11 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/assert-static-clean.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",
     "starter": "node scripts/build-starter.mjs",
-    "deploy": "vite build && gh-pages -d dist --dotfiles"
+    "deploy": "npm run build && gh-pages -d dist --dotfiles"
   },
   "keywords": [
     "monaco",
