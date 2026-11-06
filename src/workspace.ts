@@ -65,8 +65,12 @@ export class Workspace {
   files = new Map<string, WsFile>()
   /** The open directory, when there is one, so folders can be created on disk. */
   rootHandle: FileSystemDirectoryHandle | null = null
-  /** Directories the user has collapsed in the explorer. */
-  private collapsed = new Set<string>()
+  /**
+   * Directories the user has expanded in the explorer. Folders start collapsed,
+   * so the set is empty until something opens one (a click, a create, or the
+   * file that opened in the editor).
+   */
+  private expanded = new Set<string>()
   /**
    * Directories that contain no files. The tree is derived from file paths, so
    * without this a folder the user just made would vanish from it.
@@ -92,7 +96,7 @@ export class Workspace {
     this.rootName = rootName
     this.isRealDirectory = false
     this.rootHandle = null
-    this.collapsed.clear()
+    this.expanded.clear()
     this.emptyDirs.clear()
     this.files.clear()
     for (const f of files) this.put(f.path, f.content)
@@ -161,7 +165,7 @@ export class Workspace {
     }
 
     this.files.clear()
-    this.collapsed.clear()
+    this.expanded.clear()
     this.emptyDirs.clear()
     this.rootName = dir.name || 'workspace'
     this.isRealDirectory = true
@@ -217,7 +221,7 @@ export class Workspace {
     skipped = 0,
   ): { opened: number; skipped: number } {
     this.files.clear()
-    this.collapsed.clear()
+    this.expanded.clear()
     this.emptyDirs.clear()
     this.rootName = name || 'workspace'
     this.isRealDirectory = true
@@ -233,7 +237,7 @@ export class Workspace {
     if (arr.length && !this.isRealDirectory && this.files.size <= DEMO_FILES.length) {
       // First real files replace the demo set.
       this.files.clear()
-      this.collapsed.clear()
+      this.expanded.clear()
       this.rootName = (arr[0] as any).webkitRelativePath?.split('/')[0] || 'workspace'
     }
     let n = 0
@@ -315,7 +319,7 @@ export class Workspace {
     let acc = ''
     for (const p of parts) {
       acc = acc ? `${acc}/${p}` : p
-      this.collapsed.delete(acc)
+      this.expanded.add(acc)
     }
     this.emit()
   }
@@ -343,7 +347,7 @@ export class Workspace {
     let acc = ''
     for (const part of parts) {
       acc = acc ? `${acc}/${part}` : part
-      this.collapsed.delete(acc)
+      this.expanded.add(acc)
     }
 
     if (this.rootHandle) {
@@ -363,13 +367,31 @@ export class Workspace {
   }
 
   toggleDir(path: string): void {
-    if (this.collapsed.has(path)) this.collapsed.delete(path)
-    else this.collapsed.add(path)
+    if (this.expanded.has(path)) this.expanded.delete(path)
+    else this.expanded.add(path)
     this.emit()
   }
 
   isCollapsed(path: string): boolean {
-    return this.collapsed.has(path)
+    return !this.expanded.has(path)
+  }
+
+  /** Expand every ancestor of a file so the row is reachable in the tree. */
+  reveal(path: string): void {
+    const parts = path.split('/')
+    parts.pop()
+    let acc = ''
+    for (const part of parts) {
+      acc = acc ? `${acc}/${part}` : part
+      this.expanded.add(acc)
+    }
+  }
+
+  /** Collapse everything — the explorer's "collapse all" button. */
+  collapseAll(): void {
+    if (!this.expanded.size) return
+    this.expanded.clear()
+    this.emit()
   }
 
   /* ── tree ─────────────────────────────────────────────────── */
