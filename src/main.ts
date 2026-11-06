@@ -1042,7 +1042,7 @@ function renderTabs(): void {
    Tab context menu
    ══════════════════════════════════════════════════════════════ */
 
-type TabMenuEntry =
+type MenuEntry =
   | { sep: true }
   | {
       sep?: false
@@ -1053,11 +1053,13 @@ type TabMenuEntry =
       run: () => void
     }
 
-const tabMenu = document.createElement('div')
-tabMenu.className = 'tab-menu is-hidden'
-tabMenu.setAttribute('role', 'menu')
-tabMenu.setAttribute('aria-label', 'Tab actions')
-document.body.appendChild(tabMenu)
+// One floating menu serves both the editor tabs and the explorer rows: it opens
+// at the pointer, so a second container would only duplicate the dismissal,
+// clamping and keyboard code below.
+const popupMenu = document.createElement('div')
+popupMenu.className = 'popup-menu is-hidden'
+popupMenu.setAttribute('role', 'menu')
+document.body.appendChild(popupMenu)
 
 /**
  * A file's location on disk. Only the dev-server bridge knows a real root, and
@@ -1085,7 +1087,7 @@ function closeTabsExcept(keep: string | null): void {
   if (keep && openTabs.includes(keep)) openFile(keep)
 }
 
-function tabMenuEntries(path: string): TabMenuEntry[] {
+function tabMenuEntries(path: string): MenuEntry[] {
   const absolute = absolutePathFor(path)
   return [
     { label: 'Close', shortcut: 'Ctrl+W', run: () => closeTab(path) },
@@ -1096,17 +1098,7 @@ function tabMenuEntries(path: string): TabMenuEntry[] {
       label: 'Save',
       shortcut: 'Ctrl+S',
       disabled: !workspace.isDirty(path),
-      run: () => {
-        void savePath(path).then(
-          (where) => {
-            renderTabs()
-            renderTree()
-            renderScm()
-            toast(where === 'disk' ? `Saved ${path} to disk` : `Saved ${path} (in-memory workspace)`, 'ok')
-          },
-          (err: Error) => toast(`Save failed: ${err.message}`, 'err'),
-        )
-      },
+      run: () => saveFromMenu(path),
     },
     { sep: true },
     {
@@ -1130,14 +1122,15 @@ function tabMenuEntries(path: string): TabMenuEntry[] {
   ]
 }
 
-function renderTabMenu(path: string): void {
-  tabMenu.innerHTML = ''
-  for (const entry of tabMenuEntries(path)) {
+function renderMenu(entries: MenuEntry[], label: string): void {
+  popupMenu.innerHTML = ''
+  popupMenu.setAttribute('aria-label', label)
+  for (const entry of entries) {
     if (entry.sep) {
       const sep = document.createElement('div')
       sep.className = 'menu-sep'
       sep.setAttribute('role', 'separator')
-      tabMenu.appendChild(sep)
+      popupMenu.appendChild(sep)
       continue
     }
     const item = document.createElement('button')
@@ -1148,64 +1141,123 @@ function renderTabMenu(path: string): void {
     if (entry.title) item.title = entry.title
     item.innerHTML = escapeHtml(entry.label) + (entry.shortcut ? `<kbd>${entry.shortcut}</kbd>` : '')
     item.addEventListener('click', () => {
-      hideTabMenu()
+      hideMenu()
       entry.run()
     })
-    tabMenu.appendChild(item)
+    popupMenu.appendChild(item)
   }
 }
 
-function openTabMenu(path: string, x: number, y: number): void {
-  renderTabMenu(path)
-  tabMenu.classList.remove('is-hidden')
+function openMenu(entries: MenuEntry[], label: string, x: number, y: number): void {
+  renderMenu(entries, label)
+  popupMenu.classList.remove('is-hidden')
   // Measure after showing, then keep the whole menu on screen: a tab at the far
   // right, or a click near the bottom edge, must not push it out of view.
-  const rect = tabMenu.getBoundingClientRect()
+  const rect = popupMenu.getBoundingClientRect()
   const left = Math.max(6, Math.min(x, window.innerWidth - rect.width - 6))
   const top = Math.max(6, Math.min(y, window.innerHeight - rect.height - 6))
-  tabMenu.style.left = `${left}px`
-  tabMenu.style.top = `${top}px`
-  tabMenu.querySelector<HTMLButtonElement>('.menu-item:not(:disabled)')?.focus()
+  popupMenu.style.left = `${left}px`
+  popupMenu.style.top = `${top}px`
+  popupMenu.querySelector<HTMLButtonElement>('.menu-item:not(:disabled)')?.focus()
 }
 
-function hideTabMenu(): void {
-  tabMenu.classList.add('is-hidden')
+function hideMenu(): void {
+  popupMenu.classList.add('is-hidden')
 }
 
-function tabMenuOpen(): boolean {
-  return !tabMenu.classList.contains('is-hidden')
+function menuOpen(): boolean {
+  return !popupMenu.classList.contains('is-hidden')
+}
+
+function openTabMenu(path: string, x: number, y: number): void {
+  openMenu(tabMenuEntries(path), 'Tab actions', x, y)
 }
 
 document.addEventListener(
   'pointerdown',
   (e) => {
-    if (tabMenuOpen() && !tabMenu.contains(e.target as Node)) hideTabMenu()
+    if (menuOpen() && !popupMenu.contains(e.target as Node)) hideMenu()
   },
   true,
 )
 
-window.addEventListener('resize', hideTabMenu)
-window.addEventListener('blur', hideTabMenu)
+window.addEventListener('resize', hideMenu)
+window.addEventListener('blur', hideMenu)
 
 // This listener sits on document, so it runs before the app-wide handler on
 // window: Escape closes the menu alone, and the arrows walk it.
 document.addEventListener('keydown', (e) => {
-  if (!tabMenuOpen()) return
+  if (!menuOpen()) return
   if (e.key === 'Escape') {
     e.preventDefault()
     e.stopPropagation()
-    hideTabMenu()
+    hideMenu()
     return
   }
   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
   e.preventDefault()
   e.stopPropagation()
-  const items = [...tabMenu.querySelectorAll<HTMLButtonElement>('.menu-item:not(:disabled)')]
+  const items = [...popupMenu.querySelectorAll<HTMLButtonElement>('.menu-item:not(:disabled)')]
   if (!items.length) return
   const at = items.indexOf(document.activeElement as HTMLButtonElement)
   const step = e.key === 'ArrowDown' ? 1 : -1
   items[(at + step + items.length) % items.length].focus()
 })
+
+/* ══════════════════════════════════════════════════════════════
+   Explorer row context menu
+   ══════════════════════════════════════════════════════════════ */
+
+/** Save through the same path Ctrl+S uses, then refresh whatever shows state. */
+function saveFromMenu(path: string): void {
+  void savePath(path).then(
+    (where) => {
+      renderTabs()
+      renderTree()
+      renderScm()
+      toast(where === 'disk' ? `Saved ${path} to disk` : `Saved ${path} (in-memory workspace)`, 'ok')
+    },
+    (err: Error) => toast(`Save failed: ${err.message}`, 'err'),
+  )
+}
+
+function treeMenuEntries(node: { path: string; kind: 'dir' | 'file' }): MenuEntry[] {
+  const absolute = absolutePathFor(node.path)
+  if (node.kind === 'dir') {
+    const collapsed = workspace.isCollapsed(node.path)
+    return [
+      {
+        label: collapsed ? 'Expand Folder' : 'Collapse Folder',
+        run: () => workspace.toggleDir(node.path),
+      },
+      { label: 'Collapse All', run: () => workspace.collapseAll() },
+      { sep: true },
+      { label: 'Copy Path', title: absolute, run: () => copyToClipboard(absolute, `Copied ${absolute}`) },
+      { label: 'Copy Relative Path', title: node.path, run: () => copyToClipboard(node.path, `Copied ${node.path}`) },
+    ]
+  }
+  const isOpen = openTabs.includes(node.path)
+  return [
+    { label: 'Open', run: () => openFile(node.path) },
+    { label: 'Close', shortcut: 'Ctrl+W', disabled: !isOpen, run: () => closeTab(node.path) },
+    { label: 'Save', shortcut: 'Ctrl+S', disabled: !workspace.isDirty(node.path), run: () => saveFromMenu(node.path) },
+    { sep: true },
+    { label: 'Copy Path', title: absolute, run: () => copyToClipboard(absolute, `Copied ${absolute}`) },
+    { label: 'Copy Relative Path', title: node.path, run: () => copyToClipboard(node.path, `Copied ${node.path}`) },
+    { sep: true },
+    {
+      label: 'Reveal in Explorer',
+      run: () => {
+        workspace.reveal(node.path)
+        renderTree()
+      },
+    },
+  ]
+}
+
+function openTreeMenu(path: string, kind: 'dir' | 'file', x: number, y: number): void {
+  openMenu(treeMenuEntries({ path, kind }), kind === 'dir' ? 'Folder actions' : 'File actions', x, y)
+}
 
 /* ══════════════════════════════════════════════════════════════
    Explorer tree
@@ -1242,6 +1294,10 @@ function renderTree(): void {
             workspace.toggleDir(node.path)
           }
         })
+        row.addEventListener('contextmenu', (e) => {
+          e.preventDefault()
+          openTreeMenu(node.path, 'dir', e.clientX, e.clientY)
+        })
         container.appendChild(row)
         if (!collapsed) build(node.children, depth + 1, container)
       } else {
@@ -1259,6 +1315,10 @@ function renderTree(): void {
             e.preventDefault()
             openFile(node.path)
           }
+        })
+        row.addEventListener('contextmenu', (e) => {
+          e.preventDefault()
+          openTreeMenu(node.path, 'file', e.clientX, e.clientY)
         })
         container.appendChild(row)
       }
