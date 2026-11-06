@@ -21,7 +21,7 @@ import { fmtAgo, Repo, type Commit, type CommitFile } from './scm'
 import { buildMonacoOptions, defaultCore, settingById, type SettingDef } from './settings'
 import { JSON_SETTINGS, SettingsJsonView } from './settings-json'
 import { SettingsPage } from './settings-ui'
-import { Workspace, type SearchHit, type WsFile } from './workspace'
+import { Workspace, type RefreshStats, type SearchHit, type WsFile } from './workspace'
 import {
   forgetHostPath,
   hostAvailable,
@@ -29,6 +29,7 @@ import {
   hostFileHandle,
   hostInfo,
   hostList,
+  hostRootOf,
   hostTree,
   joinPath,
   lastHostPath,
@@ -1989,6 +1990,133 @@ async function restoreHostFolder(): Promise<boolean> {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════
+   Refresh from disk
+   ══════════════════════════════════════════════════════════════ */
+
+/**
+ * Re-read what the workspace is showing and fold the result in, so code that
+ * changed outside the IDE — an agent, a formatter, another editor — shows up
+ * without the tree collapsing or an unsaved buffer being thrown away.
+ *
+ * The source follows the workspace: the host folder behind the dev-server
+ * bridge, the browser's own directory handle, or the starter project (the only
+ * in-memory workspace with something to re-read).
+ */
+async function readWorkspaceSource(): Promise<RefreshStats | null> {
+  if (workspace.isRealDirectory) {
+    const hostRoot = import.meta.env.DEV ? hostRootOf(workspace.rootHandle) : ''
+    if (hostRoot && (await hostAvailable())) {
+      // One request for the whole folder, the same route the folder was opened
+      // through — so a refresh reads the disk exactly as opening it would.
+      const tree = await hostTree(hostRoot)
+      return workspace.applyRefresh(
+        tree.files.map((file) => ({
+          path: file.path,
+          content: file.content,
+          handle: hostFileHandle(joinPath(tree.root, file.path)),
+        })),
+        tree.skipped,
+      )
+    }
+    const stats = await workspace.refreshDirectory()
+    if (!stats) toast('This workspace has no folder behind it to re-read', 'err')
+    return stats
+  }
+
+  // In-memory workspace — the starter, or the bundled demo when it is missing.
+  const res = await fetch(STARTER_URL, { cache: 'no-store' })
+  if (!res.ok) {
+    toast('Nothing to refresh — this workspace has no source behind it', 'info')
+    return null
+  }
+  const data = (await res.json()) as {
+    name?: string
+    files?: Array<{ path: string; content: string }>
+  }
+  if (!data.files?.length) {
+    toast('Nothing to refresh — this workspace has no source behind it', 'info')
+    return null
+  }
+  if (workspace.isRealDirectory) return null
+  return workspace.applyRefresh(
+    data.files.map((file) => ({ path: file.path, content: file.content })),
+  )
+}
+
+/**
+ * Show a refresh that has already landed: tabs whose file is gone leave with
+ * it, buffers with no unsaved edits follow the disk, and the editor keeps its
+ * cursor where it was.
+ */
+function showRefreshed(stats: RefreshStats): void {
+  const surviving: string[] = []
+  for (const path of openTabs) {
+    if (workspace.get(path)) {
+      surviving.push(path)
+      continue
+    }
+    const model = models.get(path)
+    if (model && !model.isDisposed()) model.dispose()
+    models.delete(path)
+  }
+  openTabs = surviving
+
+  if (activePath && !workspace.get(activePath)) {
+    activePath = null
+    editor.setModel(null)
+    els.welcome.classList.remove('is-hidden')
+  }
+
+  // A file with unsaved edits was left alone by the workspace, so its model is
+  // already right; every other open buffer has to be told the new text.
+  for (const path of openTabs) {
+    const file = workspace.get(path)
+    if (!file || file.binary || workspace.isDirty(path)) continue
+    const model = models.get(path)
+    if (model && !model.isDisposed() && model.getValue() !== file.content) model.setValue(file.content)
+  }
+
+  const target = activePath ?? openTabs[0] ?? null
+  if (target && workspace.get(target)) {
+    const position = editor.getPosition()
+    const scroll = editor.getScrollTop()
+    openFile(target, true, false)
+    // openFile rebuilds the model handle but not the view: put the cursor back
+    // where the reader left it (Monaco clamps to the new length).
+    if (position) editor.setPosition(position)
+    editor.setScrollTop(scroll)
+  }
+  renderTree()
+  renderTabs()
+  renderScm()
+  chat.setActiveFile()
+
+  const bits: string[] = []
+  if (stats.changed) bits.push(`${stats.changed} updated`)
+  if (stats.added) bits.push(`${stats.added} added`)
+  if (stats.removed) bits.push(`${stats.removed} removed`)
+  if (stats.kept) bits.push(`${stats.kept} kept with unsaved edits`)
+  toast(
+    bits.length ? `Refreshed ${workspace.rootName} — ${bits.join(', ')}` : 'Already up to date',
+    bits.length ? 'ok' : 'info',
+  )
+}
+
+/** Read the workspace's source again and show whatever moved. */
+async function refreshWorkspace(): Promise<void> {
+  const button = document.getElementById('btn-refresh')
+  if (button) button.classList.add('is-spinning')
+  try {
+    const stats = await readWorkspaceSource()
+    if (stats) showRefreshed(stats)
+  } catch (err) {
+    toast(`Refresh failed: ${(err as Error).message}`, 'err')
+  } finally {
+    if (button) button.classList.remove('is-spinning')
+  }
+}
+
 // Wired only when the dev server is behind the page. In a build this whole block
 // is dead, and with it every picker function and the host-fs module.
 if (import.meta.env.DEV) {
@@ -2061,6 +2189,7 @@ document.getElementById('btn-new-folder')?.addEventListener('click', () => void 
 document.getElementById('btn-collapse')?.addEventListener('click', () => {
   workspace.collapseAll()
 })
+document.getElementById('btn-refresh')?.addEventListener('click', () => void refreshWorkspace())
 
 window.addEventListener('dragover', (e) => e.preventDefault())
 window.addEventListener('drop', async (e) => {
@@ -2137,6 +2266,7 @@ const commands: Record<string, () => void> = {
   // Dev only — the menu entry that fires it does not exist in a static build.
   ...(import.meta.env.DEV ? { 'open-host-folder': () => void openHostPicker() } : {}),
   'reopen-folder': () => void reopenLastFolder(),
+  refresh: () => void refreshWorkspace(),
   'new-file': newFile,
   'new-folder': () => void newFolder(),
   save: () => void saveActive(),
@@ -2250,6 +2380,13 @@ window.addEventListener('keydown', (e) => {
   if (mod && e.altKey && e.key.toLowerCase() === 'f') {
     e.preventDefault()
     void newFolder()
+    return
+  }
+  if (mod && e.altKey && e.key.toLowerCase() === 'r') {
+    // Ctrl+Alt+R, not Ctrl+R: the plain one reloads the page and the browser
+    // will not give it up.
+    e.preventDefault()
+    void refreshWorkspace()
     return
   }
   if (mod && e.altKey && e.key.toLowerCase() === 'o') {

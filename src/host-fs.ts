@@ -189,6 +189,16 @@ export function hostDirectoryHandle(path: string): FileSystemDirectoryHandle {
   return new HostDirectoryHandle(path) as unknown as FileSystemDirectoryHandle
 }
 
+/**
+ * The host path a directory handle stands for, or '' when it did not come from
+ * the bridge (a picked folder, or a static build where none of this exists).
+ * A refresh has to tell the two apart: the bridge re-reads over HTTP, a picked
+ * folder is walked through its own handle.
+ */
+export function hostRootOf(handle: FileSystemDirectoryHandle | null): string {
+  return handle instanceof HostDirectoryHandle ? handle.path : ''
+}
+
 /** A file handle for a file on the host — saving through it writes to disk. */
 export function hostFileHandle(path: string): FileSystemFileHandle {
   return new HostFileHandle(path) as unknown as FileSystemFileHandle

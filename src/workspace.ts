@@ -34,6 +34,26 @@ export interface SearchHit {
   text: string
 }
 
+/** One entry of a directory read — what `applyRefresh` folds into the workspace. */
+export interface RefreshFile {
+  path: string
+  content?: string
+  handle?: FileSystemFileHandle
+  binary?: boolean
+}
+
+/** What a refresh moved, for the caller's toast. */
+export interface RefreshStats {
+  /** Files the read returned. */
+  opened: number
+  added: number
+  changed: number
+  removed: number
+  /** Files with unsaved edits kept as they were (only the diff baseline moved). */
+  kept: number
+  skipped: number
+}
+
 const BINARY_EXT = new Set([
   'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'ico', 'bmp', 'tiff',
   'mp3', 'wav', 'ogg', 'flac', 'm4a', 'mp4', 'mov', 'webm', 'mkv', 'avi',
@@ -171,6 +191,21 @@ export class Workspace {
     this.isRealDirectory = true
     this.rootHandle = dir
 
+    const { files, opened, skipped } = await this.readDirectory(dir)
+    for (const file of files) this.putEntry(file)
+    this.emit()
+    return { handle: dir, opened, skipped }
+  }
+
+  /**
+   * Read every file under a directory handle, skipping the usual noise. Both
+   * `openDirectory` and `refreshDirectory` go through it, so a folder that is
+   * refreshed is read exactly as freshly as one that is opened.
+   */
+  private async readDirectory(
+    dir: FileSystemDirectoryHandle,
+  ): Promise<{ files: RefreshFile[]; opened: number; skipped: number }> {
+    const files: RefreshFile[] = []
     let opened = 0
     let skipped = 0
     const walk = async (handle: any, prefix: string): Promise<void> => {
@@ -184,19 +219,19 @@ export class Workspace {
           await walk(entry, path)
         } else {
           if (isBinaryName(entry.name)) {
-            this.putBinary(path, entry)
+            files.push({ path, handle: entry, binary: true })
             skipped++
             continue
           }
           try {
             const file = await entry.getFile()
             if (file.size > MAX_BYTES) {
-              this.putBinary(path, entry, file.size)
+              files.push({ path, handle: entry, binary: true })
               skipped++
               continue
             }
             const content = await file.text()
-            this.put(path, content, entry)
+            files.push({ path, content, handle: entry })
             opened++
           } catch {
             skipped++
@@ -205,8 +240,59 @@ export class Workspace {
       }
     }
     await walk(dir, '')
+    return { files, opened, skipped }
+  }
+
+  private putEntry(file: RefreshFile): void {
+    if (file.binary) this.putBinary(file.path, file.handle)
+    else this.put(file.path, file.content ?? '', file.handle)
+  }
+
+  /**
+   * Re-read the open directory and fold it into what is on screen: folders keep
+   * their expansion, unsaved buffers keep their text, and files that have left
+   * the disk drop out of the tree. Returns null when nothing is open.
+   */
+  async refreshDirectory(): Promise<RefreshStats | null> {
+    if (!this.isRealDirectory || !this.rootHandle) return null
+    const { files, opened, skipped } = await this.readDirectory(this.rootHandle)
+    return { ...this.applyRefresh(files, skipped), opened }
+  }
+
+  /**
+   * Fold a freshly read file set into the workspace in place — the refresh
+   * path, as opposed to `loadFiles` / `openRealFiles`, which start over.
+   *
+   * A file with unsaved edits keeps its buffer and only moves its `original`
+   * baseline to the new disk text, so the tab stays dirty and the diff shows
+   * what the edits add on top of the code that is now there.
+   */
+  applyRefresh(incoming: RefreshFile[], skipped = 0): RefreshStats {
+    const stats: RefreshStats = { opened: 0, added: 0, changed: 0, removed: 0, kept: 0, skipped }
+    const seen = new Set<string>()
+    for (const file of incoming) {
+      if (!file.path) continue
+      seen.add(file.path)
+      stats.opened++
+      const existing = this.files.get(file.path)
+      const text = file.content ?? ''
+      if (existing && !existing.binary && existing.content !== existing.original) {
+        existing.original = text
+        if (file.handle) existing.handle = file.handle
+        stats.kept++
+        continue
+      }
+      if (!existing) stats.added++
+      else if (existing.content !== text || !!existing.binary !== !!file.binary) stats.changed++
+      this.putEntry(file)
+    }
+    for (const path of [...this.files.keys()]) {
+      if (seen.has(path)) continue
+      this.files.delete(path)
+      stats.removed++
+    }
     this.emit()
-    return { handle: dir, opened, skipped }
+    return stats
   }
 
   /**

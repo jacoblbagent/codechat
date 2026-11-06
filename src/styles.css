@@ -325,6 +325,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .mini-btn:hover { background: var(--hover-overlay); }
 .mini-btn.is-on { color: var(--blue); }
+/* Only spins while a refresh is in flight — the button is the progress report. */
+.mini-btn.is-spinning svg { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .tree { overflow: auto; flex: 1; padding-bottom: 8px; }
 
