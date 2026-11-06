@@ -1064,9 +1064,12 @@ kbd {
 .sb-ai { cursor: pointer; }
 
 /* ── Overlay / palette ─────────────────────────────────────── */
+/* Modal overlays sit above every panel, including the <=900px drawers
+   (z-index 50 on .sidebar / .chat) and the row context menu (80): a dialog
+   opened from the side bar must not disappear behind it. */
 .overlay {
   position: fixed; inset: 0; background: var(--overlay-bg);
-  display: flex; justify-content: center; padding-top: 52px; z-index: 40;
+  display: flex; justify-content: center; padding-top: 52px; z-index: 90;
 }
 .palette {
   width: 520px; max-width: 92vw; height: fit-content; max-height: 60vh;
