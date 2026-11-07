@@ -1903,6 +1903,9 @@ function closeDrawers(): void {
 function setChatCollapsed(collapsed: boolean): void {
   ui.chatCollapsed = collapsed
   els.body.classList.toggle('chat-collapsed', collapsed)
+  // The attribute is what the pre-paint rules in index.html read; without this
+  // a reopen would paint collapsed for a frame on the next load.
+  document.documentElement.toggleAttribute('data-chat-collapsed', collapsed)
   saveUi(ui)
   syncChatButton()
   relayout()
@@ -1917,6 +1920,12 @@ function setChatCollapsed(collapsed: boolean): void {
 function setSidebarCollapsed(collapsed: boolean): void {
   ui.sidebarCollapsed = collapsed
   els.body.classList.toggle('sidebar-collapsed', collapsed && !isNarrow())
+  // Derived from the class rather than the argument: a narrow screen ignores
+  // the collapse, and the pre-paint rules must ignore it too.
+  document.documentElement.toggleAttribute(
+    'data-sidebar-collapsed',
+    els.body.classList.contains('sidebar-collapsed'),
+  )
   saveUi(ui)
   relayout()
 }

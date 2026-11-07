@@ -6,20 +6,27 @@
     <title>CodeChat — Browser IDE</title>
     <meta name="description" content="A VS Code-style browser IDE built on Monaco with a toggleable right-side DeepSeek chat panel." />
 
-    <!-- Resolve the theme before the first paint so the shell never
-         flashes the wrong palette. Mirrors the key used in src/main.ts. -->
+    <!-- Resolve the theme and the saved pane layout before the first paint, so
+         the shell never flashes the wrong palette, the default pane widths or
+         an open chat panel on the way in. Mirrors UI_KEY / loadUi() in
+         src/main.ts and the rules in src/styles.css — keep all three in sync. -->
     <script>
       (function () {
-        var theme = 'dark'
+        var root = document.documentElement
+        var ui = {}
         try {
-          var raw = localStorage.getItem('codechat.ui.v1')
-          var saved = raw && JSON.parse(raw).theme
-          if (saved === 'dark' || saved === 'light') theme = saved
-          /* nothing saved — One Dark Pro (dark) is the default */
+          ui = JSON.parse(localStorage.getItem('codechat.ui.v1') || '{}') || {}
         } catch (e) {
-          /* private mode / bad JSON — fall back to dark */
+          /* private mode / bad JSON — defaults stand */
         }
-        document.documentElement.dataset.theme = theme
+        /* nothing saved — One Dark Pro (dark) is the default */
+        root.dataset.theme = ui.theme === 'light' ? 'light' : 'dark'
+        if (typeof ui.chatWidth === 'number') root.style.setProperty('--chat-w', ui.chatWidth + 'px')
+        if (typeof ui.sidebarWidth === 'number') root.style.setProperty('--sidebar-w', ui.sidebarWidth + 'px')
+        /* Attributes, not classes: .body does not exist yet. The rules below
+           read them, and main.ts keeps them in step with the real classes. */
+        if (ui.chatCollapsed) root.setAttribute('data-chat-collapsed', '')
+        if (ui.sidebarCollapsed) root.setAttribute('data-sidebar-collapsed', '')
       })()
     </script>
 
@@ -70,6 +77,15 @@
       }
       .body.chat-collapsed { grid-template-columns: 48px var(--sidebar-w) 1fr 0 0; }
       .body.chat-collapsed .chat, .body.chat-collapsed .chat-resizer { display: none; }
+      /* The same two states again, keyed off <html>: the pre-paint script can
+         set those attributes before .body has been parsed, and main.ts keeps
+         them in step with the classes, so the live rules below and these agree
+         whatever the first frame shows. */
+      [data-chat-collapsed] .body { grid-template-columns: 48px var(--sidebar-w) 1fr 0 0; }
+      [data-sidebar-collapsed] .body { grid-template-columns: 48px 0 1fr 4px minmax(0, var(--chat-w)); }
+      [data-sidebar-collapsed][data-chat-collapsed] .body { grid-template-columns: 48px 0 1fr 0 0; }
+      [data-sidebar-collapsed] .body .sidebar { border-right: 0; }
+      [data-chat-collapsed] .chat, [data-chat-collapsed] .chat-resizer { display: none; }
       .titlebar { background: var(--bg-title); border-bottom: 1px solid var(--border); }
       .activitybar { background: var(--bg-activity); border-right: 1px solid var(--border); }
       .sidebar { background: var(--bg-side); border-right: 1px solid var(--border); min-width: 0; overflow: hidden; }
@@ -84,6 +100,14 @@
         #app { height: 100dvh; }
         .body { grid-template-columns: 48px 1fr; position: relative; }
         .body.chat-collapsed { grid-template-columns: 48px 1fr; }
+        /* Neither state changes the columns here — both panels are drawers —
+           and the chat must stay in the DOM to slide in, so undo the display
+           rule the desktop attributes set. */
+        [data-chat-collapsed] .body,
+        [data-sidebar-collapsed] .body,
+        [data-sidebar-collapsed][data-chat-collapsed] .body { grid-template-columns: 48px 1fr; }
+        [data-chat-collapsed] .body .chat { display: flex; }
+        [data-sidebar-collapsed] .body .sidebar { border-right: 1px solid var(--border); }
         .sidebar, .chat {
           position: absolute; top: 0; bottom: 0; z-index: 50;
           visibility: hidden;
