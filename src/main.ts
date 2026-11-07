@@ -18,6 +18,7 @@ import { diffStat, type DiffStat } from './diff'
 import { clearLastDirectory, loadLastDirectory, saveLastDirectory } from './fs-handles'
 import { ModelPicker } from './model-picker'
 import { fmtAgo, Repo, type Commit, type CommitFile } from './scm'
+import { installSemanticColours } from './semantic'
 import { buildMonacoOptions, defaultCore, settingById, type SettingDef } from './settings'
 import { JSON_SETTINGS, SettingsJsonView } from './settings-json'
 import { SettingsPage } from './settings-ui'
@@ -349,6 +350,8 @@ for (const chord of [
 // on — it still flags real mistakes — and suggestion diagnostics are off so the
 // status bar only reports genuine problems.
 monaco.languages.typescript.typescriptDefaults.setEagerModelSync(true)
+// Calls, properties and parameters get their own colours from the TS worker.
+installSemanticColours()
 // The demo workspace is a React project, so .tsx files have to be understood as
 // JSX rather than read as type assertions. Semantic checks stay off, but the
 // parser still needs to know what it is looking at.
