@@ -87,8 +87,6 @@ interface StoredSession {
   id: string
   title: string
   draft: string
-  include: boolean
-  selection: boolean
   pinned: ChatSession['pinned']
   turns: StoredTurn[]
 }
@@ -104,8 +102,8 @@ interface StoredState {
  *
  * Sessions are isolated by construction rather than by remembering to reset
  * things: the transcript, the in-flight request and its abort handle, the
- * Ctrl+L attachment, the composer draft, the two context switches and the DOM
- * subtree all live here. `send()` captures its session before its first
+ * Ctrl+L attachment, the composer draft and the DOM subtree all live here.
+ * `send()` captures its session before its first
  * `await`, so switching tabs mid-stream cannot route a chunk, an error, a
  * toast or a scroll into whichever conversation happens to be on screen.
  */
@@ -120,8 +118,6 @@ interface ChatSession {
   rendered: boolean
   pinned: { code: string; language: string; where: string } | null
   draft: string
-  include: boolean
-  selection: boolean
   streaming: boolean
   controller: AbortController | null
   rafPending: boolean
@@ -184,10 +180,6 @@ export class ChatPanel {
     input: HTMLTextAreaElement
     send: HTMLButtonElement
     stop: HTMLButtonElement
-    include: HTMLButtonElement
-    includeNote: HTMLElement
-    selection: HTMLButtonElement
-    selectionNote: HTMLElement
     model: HTMLElement
     pin: HTMLElement
     pinLabel: HTMLElement
@@ -217,10 +209,6 @@ export class ChatPanel {
       input: q('chat-input') as HTMLTextAreaElement,
       send: q('btn-send') as HTMLButtonElement,
       stop: q('btn-stop') as HTMLButtonElement,
-      include: q('ctx-include') as HTMLButtonElement,
-      includeNote: q('ctx-include-note'),
-      selection: q('ctx-selection') as HTMLButtonElement,
-      selectionNote: q('ctx-selection-note'),
       model: q('chat-model'),
       pin: q('ctx-pin'),
       pinLabel: q('ctx-pin-label'),
@@ -251,8 +239,6 @@ export class ChatPanel {
       rendered: true,
       pinned: null,
       draft: '',
-      include: true,
-      selection: true,
       streaming: false,
       controller: null,
       rafPending: false,
@@ -354,8 +340,6 @@ export class ChatPanel {
         id: stored.id,
         title: typeof stored.title === 'string' && stored.title ? stored.title : 'New chat',
         draft: typeof stored.draft === 'string' ? stored.draft : '',
-        include: stored.include !== false,
-        selection: stored.selection !== false,
         pinned: stored.pinned && typeof stored.pinned.code === 'string' ? stored.pinned : null,
       })
       session.turns = (Array.isArray(stored.turns) ? stored.turns : [])
@@ -393,8 +377,6 @@ export class ChatPanel {
         id: s.id,
         title: s.title,
         draft: s.draft,
-        include: s.include,
-        selection: s.selection,
         pinned: s.pinned,
         turns: s.turns
           .filter((t) => t.content.trim())
@@ -527,20 +509,6 @@ export class ChatPanel {
     // Delegated from the scroll host, so it covers every session's subtree
     // including ones rebuilt from storage.
     this.el.scroll.addEventListener('click', (e) => this.onMessageClick(e))
-
-    // The two context switches belong to the session, not the panel. They are
-    // buttons rather than checkboxes so the state, the cost of turning one on,
-    // and the reason it is unavailable can all live on the same control.
-    this.el.include.addEventListener('click', () => {
-      this.session.include = !this.session.include
-      this.refreshContextViz()
-      this.persist()
-    })
-    this.el.selection.addEventListener('click', () => {
-      this.session.selection = !this.session.selection
-      this.refreshContextViz()
-      this.persist()
-    })
   }
 
   private onMessageClick(e: Event): void {
@@ -701,7 +669,7 @@ export class ChatPanel {
     const blocks: string[] = []
     const segs: CtxSegment[] = []
 
-    if (session.include && ctx.path) {
+    if (ctx.path) {
       const full = ctx.content
       const truncated = full.length > this.maxContextChars
       const content = truncated ? full.slice(0, this.maxContextChars) : full
@@ -710,10 +678,10 @@ export class ChatPanel {
       segs.push({ kind: 'file', label: ctx.path.split('/').pop()!, chars: content.length, truncated })
     }
 
-    // A chunk pinned with Ctrl+L, or the live selection when its box is ticked.
-    // Either can be sent on its own, with the whole-file block turned off.
+    // A chunk pinned with Ctrl+L, or the live selection when there is one. A
+    // pinned chunk stands in for the selection it was taken from.
     const pinned = session.pinned
-    const code = pinned ? pinned.code : session.selection ? ctx.selection.trim() : ''
+    const code = pinned ? pinned.code : ctx.selection.trim()
     if (code) {
       const label = pinned ? `Selected code from \`${pinned.where}\`` : 'Selected text'
       blocks.push('', `${label}:`, '```' + (pinned?.language || lang), code, '```')
@@ -734,8 +702,8 @@ export class ChatPanel {
   }
 
   /**
-   * Redraw everything that describes the next message: the two switches and the
-   * meter under them. Both come from `contextPayload`, the same function that
+   * Redraw everything that describes the next message: the attached chunk and
+   * the meter under it. Both come from `contextPayload`, the same function that
    * builds the request, so the readout cannot disagree with what is sent.
    */
   refreshContextViz(): void {
@@ -743,8 +711,6 @@ export class ChatPanel {
     const { segs, truncated } = this.contextPayload(this.session)
     const total = segs.reduce((n, s) => n + s.chars, 0)
     const budget = this.maxContextChars
-
-    this.syncContextToggles(ctx)
 
     // Composition bar: segments are proportional to the total, so a small
     // selection stays visible next to a whole file.
@@ -796,46 +762,6 @@ export class ChatPanel {
     totalEl.textContent = `${fmtChars(total)} / ${fmtChars(budget)} chars`
     totalEl.title = `${total.toLocaleString()} characters attached, against the ${budget.toLocaleString()} character cap on the whole-file block`
     this.el.vizLegend.appendChild(totalEl)
-  }
-
-  /**
-   * Write the state, the cost and the reason onto the two switches. A tick means
-   * on, the note says what it is worth right now, a dashed border means on with
-   * nothing to send, and dimming means a pinned chunk is standing in for it —
-   * all of which the bare checkboxes left you to infer.
-   */
-  private syncContextToggles(ctx: ChatContext): void {
-    const include = this.el.include
-    include.setAttribute('aria-pressed', String(this.session.include))
-    include.disabled = !ctx.path
-    include.classList.toggle('is-empty', this.session.include && !ctx.path)
-    this.el.includeNote.textContent = ctx.path ? ctx.path.split('/').pop()! : 'no file'
-    include.title = ctx.path
-      ? `${this.session.include ? 'Sending' : 'Not sending'} the whole file — ${ctx.path}`
-      : 'No file is open in the editor'
-
-    const selection = this.el.selection
-    // Count the line *range*, not the trimmed text: trimming eats a trailing
-    // newline and made this disagree with the line count on a pinned chunk.
-    const lines = ctx.selectionLines
-      ? ctx.selectionLines.end - ctx.selectionLines.start + 1
-      : ctx.selection.trim()
-        ? ctx.selection.trim().split('\n').length
-        : 0
-    const pinned = Boolean(this.session.pinned)
-    selection.setAttribute('aria-pressed', String(this.session.selection))
-    selection.classList.toggle('is-empty', this.session.selection && !lines && !pinned)
-    selection.classList.toggle('is-muted', pinned)
-    this.el.selectionNote.textContent = pinned
-      ? 'pinned instead'
-      : lines
-        ? `${lines} line${lines === 1 ? '' : 's'}`
-        : 'nothing selected'
-    selection.title = pinned
-      ? 'A chunk pinned with Ctrl+L is sent instead of the live selection'
-      : lines
-        ? `${this.session.selection ? 'Sending' : 'Not sending'} the ${lines} selected line${lines === 1 ? '' : 's'}`
-        : 'Select code in the editor to send a chunk alongside the message'
   }
 
   async send(preset?: string): Promise<void> {
