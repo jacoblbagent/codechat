@@ -67,6 +67,7 @@
   --hover-overlay-xstrong: rgba(255, 255, 255, 0.14);
   --hover-overlay-soft: rgba(255, 255, 255, 0.08);
   --hover-overlay-code: rgba(255, 255, 255, 0.09);
+  --tree-guide: rgba(255, 255, 255, 0.12);
   --sb-fg: #9da5b4;
   --sb-hover: rgba(255, 255, 255, 0.14);
   --sb-brand-bg: rgba(0, 0, 0, 0.16);
@@ -144,6 +145,7 @@
   --hover-overlay-xstrong: rgba(0, 0, 0, 0.1);
   --hover-overlay-soft: rgba(0, 0, 0, 0.05);
   --hover-overlay-code: rgba(0, 0, 0, 0.06);
+  --tree-guide: rgba(0, 0, 0, 0.14);
   --sb-fg: #383a42;
   --sb-hover: rgba(0, 0, 0, 0.08);
   --sb-brand-bg: rgba(0, 0, 0, 0.06);
@@ -409,10 +411,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   cursor: pointer; white-space: nowrap; user-select: none;
   font-size: 13px; color: var(--fg);
 }
-.row:hover { background: var(--bg-hover); }
-.row.is-active { background: var(--bg-active); }
+.row:hover { background-color: var(--bg-hover); }
+.row.is-active { background-color: var(--bg-active); }
 /* Row whose context menu is open — the VS Code "this is the target" grey. */
-.row.is-ctx { background: var(--bg-active); }
+.row.is-ctx { background-color: var(--bg-active); }
+/* background-color, not the `background` shorthand, above: a guides row paints
+   its indent lines as a background-image and the shorthand would wipe them. */
 .row:focus-visible { outline: 1px solid var(--blue); outline-offset: -1px; }
 .row .twisty {
   width: 14px; flex: none; color: var(--fg-dim);
@@ -426,6 +430,20 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   margin-left: auto; flex: none;
 }
 .row.q-hidden { display: none; }
+
+/* Indent guides — one 1px line per ancestor level, drawn at that level's twisty
+   centre: rows sit at padding-left 6 + 12·d and the twisty is 14 wide, so the
+   k-th ancestor's centre is 13 + 12·k. A repeating gradient every 12px over a
+   box `--d` lines wide reproduces exactly that (--d is the row's depth, set by
+   renderTree(); the root row is depth 0 and gets no class). */
+.row.guides {
+  background-image: repeating-linear-gradient(
+    to right, var(--tree-guide) 0 1px, transparent 1px 12px
+  );
+  background-repeat: no-repeat;
+  background-position: 13px top;
+  background-size: calc((var(--d, 1) - 1) * 12px + 1px) 100%;
+}
 
 .pane-pad { padding: 6px 10px; display: flex; flex-direction: column; gap: 6px; overflow: auto; }
 .field {
