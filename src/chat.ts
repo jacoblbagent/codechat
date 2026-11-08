@@ -540,13 +540,6 @@ export class ChatPanel {
       this.refreshContextViz()
       this.persist()
     })
-
-    for (const chip of document.querySelectorAll<HTMLElement>('.chip[data-prompt]')) {
-      chip.addEventListener('click', () => {
-        this.el.input.value = chip.dataset.prompt ?? ''
-        void this.send()
-      })
-    }
   }
 
   private onMessageClick(e: Event): void {
