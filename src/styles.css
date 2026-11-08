@@ -520,6 +520,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .editor-host { position: relative; flex: 1; min-height: 0; }
 #editor { position: absolute; inset: 0; }
 
+/* Monaco shades the minimap's left edge with an inset copy of the theme's
+   scrollbar.shadow, so the code reads as sliding underneath it. That gradient
+   fights the flat One Dark seam between the text and the map — drop it and
+   leave the 6px strip transparent. Monaco injects its editor CSS at runtime,
+   after this file, with the same `.monaco-editor .minimap-shadow-visible`
+   selector, so the id here is what wins the tie. Only the -visible variant is
+   shaded; -hidden is Monaco's own reset, so this never touches layout. */
+#editor .monaco-editor .minimap-shadow-visible { box-shadow: none; }
+
 /* ── Settings page ───────────────────────────────────────────
    Replaces the editor area, like VS Code's settings tab. It is its own
    container, so the rows can respond to the *panel* width rather than the
