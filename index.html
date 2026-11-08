@@ -121,6 +121,19 @@
         .scrim[hidden] { display: none; }
       }
     </style>
+
+    <!-- The full stylesheet. Loaded from the head as a real <link> rather than
+         imported by main.ts: in dev Vite turns a JS-imported CSS file into a
+         module that injects a <style> tag only after the whole module graph
+         (main.ts → chat.ts → monaco.ts) has been fetched and run, so the
+         components painted unstyled for a beat while the inline block above
+         already had the shell dark. A <link> is parsed by the preload scanner
+         and, in a build, is a render-blocking <link> in the head. Vite serves
+         this path as text/css in dev (it checks the Accept header) and hashes
+         it into an asset in the build, so one tag covers both. Keep it after
+         the inline block: identical tokens aside, the file must stay the
+         authority for the cascade. -->
+    <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
     <div id="app">

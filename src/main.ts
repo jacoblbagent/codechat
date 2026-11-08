@@ -1,4 +1,3 @@
-import './styles.css'
 import { ChatPanel, type ChatStatus } from './chat'
 import { DEFAULT_MODEL, type ReasoningEffort } from './deepseek'
 import {
