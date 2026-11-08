@@ -34,7 +34,6 @@ export interface ChatDeps {
   createFileFromCode: (code: string, lang: string) => void
   toast: (message: string, kind?: 'ok' | 'err') => void
   openSettings: () => void
-  onStatus: (status: ChatStatus) => void
 }
 
 const SYSTEM_PROMPT = [
@@ -296,7 +295,6 @@ export class ChatPanel {
     this.refreshContextViz()
     this.renderTabs()
     this.revealTab(session.id)
-    this.deps.onStatus(session.status)
     this.persist()
   }
 
@@ -871,11 +869,10 @@ export class ChatPanel {
     }
   }
 
-  /** Status lives on the session; the dot only ever shows the active one. */
+  /** Status lives on the session; the tab renders its own busy/error state. */
   private setStatus(session: ChatSession, status: ChatStatus): void {
     session.status = status
     this.renderTabs()
-    if (session === this.session) this.deps.onStatus(status)
   }
 
   private async regenerate(): Promise<void> {

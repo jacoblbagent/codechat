@@ -758,18 +758,14 @@ kbd {
   background: var(--bg-side); border-left: 1px solid var(--border);
   display: flex; flex-direction: column; min-width: 0; overflow: hidden;
 }
-/* One row: the connection pip, the session tabs, the panel controls at the
-   right edge. The vendor label that used to sit here is gone — the model the
+/* One row: the session tabs and the panel controls at the right edge. The
+   vendor label that used to sit here is gone — the model the
    panel is talking to is named on the composer's model pill instead. */
 .chat-bar {
   flex: none; display: flex; align-items: center; gap: 8px;
   height: 35px; padding-left: 11px;
   background: var(--bg-side); border-bottom: 1px solid var(--border);
 }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--fg-dim); flex: none; }
-.dot.is-ready { background: var(--green); box-shadow: 0 0 6px var(--glow-green); }
-.dot.is-busy { background: var(--blue); animation: pulse 1.1s ease-in-out infinite; }
-.dot.is-error { background: var(--red); }
 @keyframes pulse { 50% { opacity: 0.3; } }
 /* The model the panel is talking to: a bordered chip matching the thinking
    selector beside it, so the two controls read as one group. */

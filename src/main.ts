@@ -1,4 +1,4 @@
-import { ChatPanel, type ChatStatus } from './chat'
+import { ChatPanel } from './chat'
 import { DEFAULT_MODEL, type ReasoningEffort } from './deepseek'
 import {
   defineTheme,
@@ -241,7 +241,6 @@ const els = {
   scmCommitNote: $('scm-commit-note'),
   thinkSelect: $<HTMLSelectElement>('think-select'),
   btnSettings: $('btn-open-settings'),
-  chatDot: $('chat-dot'),
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1648,18 +1647,6 @@ els.quickOpen.addEventListener('click', (e) => {
 
 let chat: ChatPanel
 
-function setChatStatus(status: ChatStatus): void {
-  els.chatDot.className = `dot${status === 'ready' ? ' is-ready' : status === 'busy' ? ' is-busy' : status === 'error' ? ' is-error' : ''}`
-  els.chatDot.title =
-    status === 'ready'
-      ? 'Key configured — ready'
-      : status === 'busy'
-        ? 'Generating…'
-        : status === 'error'
-          ? 'Last request failed'
-          : 'No API key set'
-}
-
 function chatContext() {
   const path = activePath
   const file = path ? workspace.get(path) : undefined
@@ -1859,7 +1846,6 @@ chat = new ChatPanel({
   createFileFromCode,
   toast,
   openSettings,
-  onStatus: setChatStatus,
 })
 
 const modelBtn = document.getElementById('btn-model')
@@ -2961,7 +2947,6 @@ function applySetting(def: SettingDef): void {
   }
   switch (def.id) {
     case 'codechat.apiKey':
-      setChatStatus(settings.apiKey ? 'ready' : 'idle')
       // New key, new account — the cached balance is no longer ours.
       void creditsRow?.keyChanged()
       break
@@ -3135,7 +3120,6 @@ els.thinkSelect.value = settings.reasoning
 workspace.loadDemo()
 renderTree()
 renderTabs()
-setChatStatus(settings.apiKey ? 'ready' : 'idle')
 setView('explorer')
 
 // Open the first demo file so the editor and chat context are live on load.
