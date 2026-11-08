@@ -1,5 +1,5 @@
 /**
- * A searchable model picker, used in two places: the chat panel's header badge
+ * A searchable model picker, used in two places: the chat panel's composer row
  * and the `codechat.model` row in Settings. One component, so the two can never
  * disagree about what is selectable.
  *
