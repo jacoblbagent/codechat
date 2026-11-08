@@ -752,6 +752,12 @@ kbd {
 .sidebar-resizer { overflow: hidden; }
 .chat-resizer:hover, .chat-resizer.is-dragging,
 .sidebar-resizer:hover, .sidebar-resizer.is-dragging { background: var(--blue); }
+/* A drag that closes a panel must not yank the divider out from under the
+   pointer: pointer capture is what keeps the drag loop alive, and Chromium
+   drops it once the capture target stops being rendered or hit-tested. So a
+   divider stays live for the rest of the drag even after its panel closed. */
+.body.chat-collapsed .chat-resizer.is-dragging { display: block; }
+.body.sidebar-collapsed .sidebar-resizer.is-dragging { pointer-events: auto; }
 
 /* ── Chat panel ────────────────────────────────────────────── */
 .chat {

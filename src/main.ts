@@ -2046,13 +2046,15 @@ narrow.addEventListener('change', () => {
   relayout()
 })
 
-/* Resizers — one pointer-capture drag loop per divider. `onResize` gets every
+/* Resizers — one pointer-capture drag loop per divider. `onStart` fires on
+   grab (where a drag records the width it began from), `onResize` gets every
    move while the drag is live; `onDone` fires once on release, which is where a
    new width is persisted. */
 function installResizer(
   el: HTMLElement,
   onResize: (e: PointerEvent) => void,
   onDone: () => void,
+  onStart?: () => void,
 ): void {
   let dragging = false
   el.addEventListener('pointerdown', (e) => {
@@ -2061,6 +2063,7 @@ function installResizer(
     el.setPointerCapture(e.pointerId)
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
+    onStart?.()
   })
   el.addEventListener('pointermove', (e) => {
     if (!dragging) return
@@ -2083,31 +2086,83 @@ function installResizer(
   el.addEventListener('pointercancel', endDrag)
 }
 
+/* Panel widths. The floors match the Settings rows (`workbench.sideBarWidth`);
+   each panel also has a *close* threshold below its floor, so a drag that runs
+   on past the minimum shuts the panel instead of only stopping at it — the
+   divider closes a panel the same way the activity bar's own button does. The
+   gap between floor and threshold is the snap zone: the panel stops shrinking,
+   and a little further on it gives up. Dragging back out of the zone reopens
+   the panel at its floor, so a mis-drag is undoable without letting go. */
+const SIDEBAR_MIN_W = 160
+const SIDEBAR_MAX_W = 500
+const SIDEBAR_CLOSE_W = 110
+const CHAT_MIN_W = 280
+const CHAT_MAX_W = 760
+const CHAT_CLOSE_W = 200
+
+/* The width a drag started from, so a drag that ends by closing the panel can
+   put the panel's remembered width back — the panel then reopens where it was,
+   not squashed to its floor, exactly as the Ctrl+B toggle does. */
+let sidebarW0 = ui.sidebarWidth
+let chatW0 = ui.chatWidth
+
 /* Chat panel: measured from the right edge, so it grows leftwards. */
 installResizer(
   els.chatResizer,
   (e) => {
     const rect = els.body.getBoundingClientRect()
-    const width = Math.min(Math.max(rect.right - e.clientX, 280), Math.min(760, rect.width - 320))
+    const raw = rect.right - e.clientX
+    if (raw < CHAT_CLOSE_W) {
+      if (!ui.chatCollapsed) setChatCollapsed(true)
+      return
+    }
+    if (ui.chatCollapsed) setChatCollapsed(false)
+    const width = Math.min(Math.max(raw, CHAT_MIN_W), Math.min(CHAT_MAX_W, rect.width - 320))
     document.documentElement.style.setProperty('--chat-w', `${width}px`)
     ui.chatWidth = width
     editor.layout()
   },
-  () => saveUi(ui),
+  () => {
+    // Closed by the drag: keep the width the panel had before it, so reopening
+    // restores it instead of the floor the drag had squeezed it down to.
+    if (ui.chatCollapsed && chatW0 >= CHAT_MIN_W) {
+      ui.chatWidth = chatW0
+      document.documentElement.style.setProperty('--chat-w', `${chatW0}px`)
+    }
+    saveUi(ui)
+  },
+  () => {
+    chatW0 = ui.chatWidth
+  },
 )
 
 /* Side bar: measured from the activity bar's right edge (48px), so it grows
-   rightwards. Same clamps as the Settings row for workbench.sideBarWidth. */
+   rightwards. */
 installResizer(
   els.sidebarResizer,
   (e) => {
     const rect = els.body.getBoundingClientRect()
-    const width = Math.min(Math.max(e.clientX - rect.left - 48, 160), Math.min(500, rect.width - 320))
+    const raw = e.clientX - rect.left - 48
+    if (raw < SIDEBAR_CLOSE_W) {
+      if (!isSidebarCollapsed()) setSidebarCollapsed(true)
+      return
+    }
+    if (isSidebarCollapsed()) setSidebarCollapsed(false)
+    const width = Math.min(Math.max(raw, SIDEBAR_MIN_W), Math.min(SIDEBAR_MAX_W, rect.width - 320))
     document.documentElement.style.setProperty('--sidebar-w', `${width}px`)
     ui.sidebarWidth = width
     editor.layout()
   },
-  () => saveUi(ui),
+  () => {
+    if (ui.sidebarCollapsed && sidebarW0 >= SIDEBAR_MIN_W) {
+      ui.sidebarWidth = sidebarW0
+      document.documentElement.style.setProperty('--sidebar-w', `${sidebarW0}px`)
+    }
+    saveUi(ui)
+  },
+  () => {
+    sidebarW0 = ui.sidebarWidth
+  },
 )
 
 /* ══════════════════════════════════════════════════════════════
