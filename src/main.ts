@@ -1367,10 +1367,27 @@ function openTreeMenu(path: string, kind: 'dir' | 'file', x: number, y: number):
 function renderTree(): void {
   els.tree.innerHTML = ''
   const nodes = workspace.tree()
-  if (!nodes.length) {
-    els.tree.innerHTML = '<div class="row" style="color:var(--fg-dim)">No files — open a folder.</div>'
-    return
-  }
+
+  // The root folder is a row of its own, above its contents, the way VS Code's
+  // workspace row sits above the tree. Its twisty folds the whole tree away.
+  const rootRow = document.createElement('div')
+  rootRow.className = workspace.rootCollapsed ? 'row' : 'row is-open'
+  rootRow.style.paddingLeft = '6px'
+  rootRow.setAttribute('role', 'treeitem')
+  rootRow.tabIndex = 0
+  rootRow.title = workspace.rootName
+  rootRow.innerHTML =
+    `<span class="twisty"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 4l4 4-4 4"/></svg></span>` +
+    `<span class="ico">${folderIcon(!workspace.rootCollapsed)}</span>` +
+    `<span class="name">${escapeHtml(workspace.rootName)}</span>`
+  rootRow.addEventListener('click', () => workspace.toggleRoot())
+  rootRow.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      workspace.toggleRoot()
+    }
+  })
+  els.tree.appendChild(rootRow)
 
   // Right-clicking a row selects it the way VS Code does, so it is obvious
   // which row the menu belongs to. hideMenu() clears the highlight.
@@ -1452,7 +1469,18 @@ function renderTree(): void {
     }
   }
 
-  build(nodes, 0, els.tree)
+  // A folded root leaves its row as the whole tree.
+  if (!workspace.rootCollapsed) {
+    if (nodes.length) {
+      build(nodes, 1, els.tree)
+    } else {
+      const hint = document.createElement('div')
+      hint.className = 'row'
+      hint.style.color = 'var(--fg-dim)'
+      hint.textContent = 'No files — open a folder.'
+      els.tree.appendChild(hint)
+    }
+  }
   els.wsName.textContent = workspace.rootName
   els.sbBranchName.textContent = workspace.isRealDirectory ? workspace.rootName : 'browser'
 }

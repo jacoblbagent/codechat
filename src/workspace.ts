@@ -86,6 +86,11 @@ export class Workspace {
   /** The open directory, when there is one, so folders can be created on disk. */
   rootHandle: FileSystemDirectoryHandle | null = null
   /**
+   * The explorer's root row folds the whole tree away, the way VS Code's
+   * workspace row does. Folders start collapsed, so the root starts expanded.
+   */
+  rootCollapsed = false
+  /**
    * Directories the user has expanded in the explorer. Folders start collapsed,
    * so the set is empty until something opens one (a click, a create, or the
    * file that opened in the editor).
@@ -116,6 +121,7 @@ export class Workspace {
     this.rootName = rootName
     this.isRealDirectory = false
     this.rootHandle = null
+    this.rootCollapsed = false
     this.expanded.clear()
     this.emptyDirs.clear()
     this.files.clear()
@@ -190,6 +196,7 @@ export class Workspace {
     this.rootName = dir.name || 'workspace'
     this.isRealDirectory = true
     this.rootHandle = dir
+    this.rootCollapsed = false
 
     const { files, opened, skipped } = await this.readDirectory(dir)
     for (const file of files) this.putEntry(file)
@@ -312,6 +319,7 @@ export class Workspace {
     this.rootName = name || 'workspace'
     this.isRealDirectory = true
     this.rootHandle = root
+    this.rootCollapsed = false
     for (const file of files) this.put(file.path, file.content, file.handle)
     this.emit()
     return { opened: files.length, skipped }
@@ -501,6 +509,12 @@ export class Workspace {
       acc = acc ? `${acc}/${part}` : part
       this.expanded.add(acc)
     }
+  }
+
+  /** Fold or unfold the whole tree — the explorer's root row. */
+  toggleRoot(): void {
+    this.rootCollapsed = !this.rootCollapsed
+    this.emit()
   }
 
   /** Collapse everything — the explorer's "collapse all" button. */
