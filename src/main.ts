@@ -2046,6 +2046,20 @@ narrow.addEventListener('change', () => {
   relayout()
 })
 
+/* Monaco rebuilds the minimap canvas on every layout, so a drag that re-lays the
+   editor many times a second paints the map blank on each step — it flashes
+   instead of sliding. Hold a frozen copy of the last map over the canvas while
+   the divider is held; it comes off on release and the live map takes over. */
+function freezeMinimap(): () => void {
+  const canvas = els.editorHost.querySelector<HTMLCanvasElement>('.minimap canvas')
+  if (!canvas || !canvas.width || !canvas.height || !canvas.parentElement) return () => {}
+  const freeze = document.createElement('div')
+  freeze.className = 'minimap-freeze'
+  freeze.style.backgroundImage = `url(${canvas.toDataURL()})`
+  canvas.parentElement.appendChild(freeze)
+  return () => freeze.remove()
+}
+
 /* Resizers — one pointer-capture drag loop per divider. `onStart` fires on
    grab (where a drag records the width it began from), `onResize` gets every
    move while the drag is live; `onDone` fires once on release, which is where a
@@ -2057,12 +2071,14 @@ function installResizer(
   onStart?: () => void,
 ): void {
   let dragging = false
+  let thaw = (): void => {}
   el.addEventListener('pointerdown', (e) => {
     dragging = true
     el.classList.add('is-dragging')
     el.setPointerCapture(e.pointerId)
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
+    thaw = freezeMinimap()
     onStart?.()
   })
   el.addEventListener('pointermove', (e) => {
@@ -2081,6 +2097,8 @@ function installResizer(
       /* already released */
     }
     onDone()
+    thaw()
+    thaw = (): void => {}
   }
   el.addEventListener('pointerup', endDrag)
   el.addEventListener('pointercancel', endDrag)

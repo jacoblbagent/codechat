@@ -531,7 +531,22 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
    always in the DOM, so the seam does not blink on when the map starts
    scrolling; border-box keeps the 1px inside the width Monaco sets inline. */
 #editor .monaco-editor .minimap-shadow-visible { box-shadow: none; }
-#editor .monaco-editor .minimap { box-sizing: border-box; border-left: 1px solid var(--border); }
+#editor .monaco-editor .minimap {
+  box-sizing: border-box; border-left: 1px solid var(--border);
+  background-color: var(--bg);
+}
+
+/* Monaco rebuilds the minimap canvas on every layout, so while a divider is
+   dragged the map paints blank on each step and reads as a flash. A frozen copy
+   of the last map, appended over the canvas for the length of the drag, keeps
+   it solid; 100% 100% lets it stretch with the width Monaco recomputes. */
+#editor .monaco-editor .minimap-freeze {
+  position: absolute; inset: 0; z-index: 1;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  pointer-events: none;
+}
 
 /* ── Settings page ───────────────────────────────────────────
    Replaces the editor area, like VS Code's settings tab. It is its own
