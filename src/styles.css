@@ -801,10 +801,21 @@ kbd {
   background: var(--bg-tab-inactive); color: var(--fg-dim);
   border-right: 1px solid var(--border); border-top: 1px solid transparent;
   cursor: pointer; font-size: 12px; white-space: nowrap;
+  /* Tabs are dragged sideways to reorder, so a press must never start a text
+     selection of the label. */
+  user-select: none;
 }
 .chat-tab:hover { color: var(--fg); }
 .chat-tab.is-active { background: var(--bg-tab-active); color: var(--fg-bright); border-top-color: var(--blue); }
 .chat-tab:focus-visible { outline: 1px solid var(--blue); outline-offset: -1px; }
+/* Dragging a tab along the strip to reorder it. The real element moves, so the
+   tab reads as lifted rather than as a ghost, and the cursor is held as a grab
+   for the whole gesture — the tab keeps sliding out from under the pointer. */
+.chat-tab.is-dragging {
+  background: var(--bg-tab-active); color: var(--fg-bright); opacity: 0.75;
+}
+body.is-tab-dragging .chat-tab,
+body.is-tab-dragging .chat-tab-x { cursor: grabbing; }
 .chat-tab-name { overflow: hidden; text-overflow: ellipsis; }
 /* A session left in the background is still working; say so on its tab. */
 .chat-tab.is-busy::before {

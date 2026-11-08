@@ -170,6 +170,18 @@ export class ChatPanel {
   /** Monotonic, so a session keeps its "New chat N" label for its whole life. */
   private seq = 0
   private saveTimer: number | null = null
+  /** The tab currently in hand on the strip, or null when nothing is dragged. */
+  private drag: {
+    id: string
+    tab: HTMLElement
+    x0: number
+    y0: number
+    moved: boolean
+    pointerId: number
+  } | null = null
+  /** Set by the release that ends a real drag, so the click it still produces
+   *  does not also activate whichever tab the drop landed on. */
+  private suppressTabClick = false
 
   private el: {
     panel: HTMLElement
@@ -398,6 +410,9 @@ export class ChatPanel {
   /* ── tabs ─────────────────────────────────────────────────── */
 
   private renderTabs(): void {
+    // A re-render replaces the strip's children, which would leave a live drag
+    // holding a detached tab and committing an order built from it.
+    this.cancelTabDrag()
     this.el.tabs.replaceChildren()
     for (const session of this.sessions) {
       const active = session.id === this.activeId
@@ -432,6 +447,12 @@ export class ChatPanel {
 
   private wireTabs(): void {
     this.el.tabs.addEventListener('click', (e) => {
+      // The release that ends a drag still produces a click; swallow it rather
+      // than let it activate the tab the drop landed on.
+      if (this.suppressTabClick) {
+        this.suppressTabClick = false
+        return
+      }
       const target = e.target as HTMLElement
       const close = target.closest<HTMLElement>('[data-close]')
       if (close?.dataset.close) {
@@ -464,6 +485,13 @@ export class ChatPanel {
       this.activate(this.sessions[index].id)
       this.focusTab(this.sessions[index].id)
     })
+
+    // Reorder: the pointer loop lives on the strip (never rebuilt), so the tabs
+    // themselves can be replaced by a render without losing the wiring.
+    this.el.tabs.addEventListener('pointerdown', (e) => this.onTabPointerDown(e))
+    this.el.tabs.addEventListener('pointermove', (e) => this.onTabPointerMove(e))
+    this.el.tabs.addEventListener('pointerup', (e) => this.onTabPointerUp(e))
+    this.el.tabs.addEventListener('pointercancel', (e) => this.onTabPointerUp(e))
   }
 
   private focusTab(id: string): void {
@@ -480,6 +508,125 @@ export class ChatPanel {
     const box = tab.getBoundingClientRect()
     if (box.left < strip.left) this.el.tabs.scrollLeft -= strip.left - box.left
     else if (box.right > strip.right) this.el.tabs.scrollLeft += box.right - strip.right
+  }
+
+  /* ── drag to reorder ──────────────────────────────────────── */
+
+  /**
+   * Tabs are moved by dragging them along the strip, the way browser tabs are.
+   * A press arms a drag but nothing happens until the pointer has travelled
+   * far enough that the gesture cannot have been a click, so activating a tab
+   * and closing one still work. Touch is deliberately left out: the strip
+   * scrolls sideways under a finger, and a drag that claimed the gesture at
+   * once would fight that pan.
+   */
+  private onTabPointerDown(e: PointerEvent): void {
+    this.suppressTabClick = false
+    if (e.button !== 0 || e.pointerType === 'touch') return
+    const target = e.target as HTMLElement
+    if (target.closest('[data-close]')) return
+    const tab = target.closest<HTMLElement>('[data-session]')
+    if (!tab?.dataset.session) return
+    this.drag = {
+      id: tab.dataset.session,
+      tab,
+      x0: e.clientX,
+      y0: e.clientY,
+      moved: false,
+      pointerId: e.pointerId,
+    }
+  }
+
+  private onTabPointerMove(e: PointerEvent): void {
+    const drag = this.drag
+    if (!drag || e.pointerId !== drag.pointerId) return
+
+    if (!drag.moved) {
+      // Slack, so a press that was meant as a click never reorders anything.
+      if (Math.abs(e.clientX - drag.x0) < 5 && Math.abs(e.clientY - drag.y0) < 5) return
+      drag.moved = true
+      drag.tab.classList.add('is-dragging')
+      document.body.classList.add('is-tab-dragging')
+      // Capture only once the drag is real: a press that turns out to be a
+      // click must keep its own event target, or the click lands on the strip.
+      try {
+        this.el.tabs.setPointerCapture(e.pointerId)
+      } catch {
+        /* the pointer is already gone */
+      }
+    }
+
+    // Land before the first other tab whose midpoint is right of the pointer;
+    // past every midpoint, the tab goes to the end of the strip.
+    let before: HTMLElement | null = null
+    for (const other of this.el.tabs.querySelectorAll<HTMLElement>('[data-session]')) {
+      if (other === drag.tab) continue
+      const box = other.getBoundingClientRect()
+      if (e.clientX < box.left + box.width / 2) {
+        before = other
+        break
+      }
+    }
+    if (before) {
+      if (drag.tab.nextElementSibling !== before) this.el.tabs.insertBefore(drag.tab, before)
+    } else if (this.el.tabs.lastElementChild !== drag.tab) {
+      this.el.tabs.appendChild(drag.tab)
+    }
+
+    // Carry the tab past the ones off screen: nudge the strip at either edge.
+    const strip = this.el.tabs.getBoundingClientRect()
+    if (e.clientX < strip.left + 24) this.el.tabs.scrollLeft -= 9
+    else if (e.clientX > strip.right - 24) this.el.tabs.scrollLeft += 9
+  }
+
+  private onTabPointerUp(e: PointerEvent): void {
+    const drag = this.drag
+    if (!drag || e.pointerId !== drag.pointerId) return
+    const { moved, id } = drag
+    this.cancelTabDrag()
+    if (!moved) return
+    this.suppressTabClick = true
+    // Belt and braces: if no click follows (the release landed off the strip),
+    // the flag must not swallow an unrelated one later.
+    window.setTimeout(() => {
+      this.suppressTabClick = false
+    }, 250)
+    this.commitTabOrder(id)
+  }
+
+  /** Let go of the tab in hand without touching the order — a re-render needs
+   *  the drag state gone before it rebuilds the strip. */
+  private cancelTabDrag(): void {
+    const drag = this.drag
+    if (!drag) return
+    this.drag = null
+    try {
+      this.el.tabs.releasePointerCapture(drag.pointerId)
+    } catch {
+      /* never captured */
+    }
+    drag.tab.classList.remove('is-dragging')
+    document.body.classList.remove('is-tab-dragging')
+  }
+
+  /** The strip's DOM order is the order; fold it back into `sessions`. */
+  private commitTabOrder(id: string): void {
+    const ids = [...this.el.tabs.querySelectorAll<HTMLElement>('[data-session]')].map(
+      (tab) => tab.dataset.session ?? '',
+    )
+    const ordered = ids
+      .map((sid) => this.sessions.find((s) => s.id === sid))
+      .filter((s): s is ChatSession => Boolean(s))
+    // A session opened or closed mid-drag makes the strip a stale view of the
+    // list; leave the order alone rather than drop one on the way back.
+    if (ordered.length !== this.sessions.length) return
+    this.sessions = ordered
+    this.renderTabs()
+    this.revealTab(id)
+    // Keep the tab that was just moved focused, so a second drag or an arrow
+    // key carries on from where the user left it.
+    this.focusTab(id)
+    this.persist()
   }
 
   /* ── wiring ───────────────────────────────────────────────── */
