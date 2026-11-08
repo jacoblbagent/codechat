@@ -997,7 +997,8 @@ kbd {
   overflow: hidden;
   transition: border-color 0.12s;
 }
-.composer:focus-within { border-color: var(--blue); }
+/* No focus ring on the card: the caret in the box is the focus state, and a
+   blue outline around the whole composer on click read as an error border. */
 
 /* The context row sits inside the card, so its readout belongs to the box it
    describes rather than floating above it. */
@@ -1013,6 +1014,9 @@ kbd {
   background: none; color: var(--fg); border: 0; padding: 10px 12px 2px;
   font: 13px/1.45 var(--ui); outline: none;
 }
+/* textarea:focus-visible (0,1,1) outranks .chat-input (0,1,0), so the global
+   rule still drew a blue box inside the card; kill it here explicitly. */
+.chat-input:focus, .chat-input:focus-visible { outline: none; }
 .chat-input::placeholder { color: var(--fg-placeholder); }
 
 /* Controls row: thinking level then the model then stop/send, the whole cluster
