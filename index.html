@@ -344,11 +344,15 @@
 
         <!-- Chat panel -->
         <aside class="chat" id="chat" aria-label="AI chat panel">
-          <div class="chat-head">
-            <div class="chat-head-left">
-              <span class="dot" id="chat-dot" title="Connection status"></span>
-              <span class="chat-title" id="chat-vendor">DeepSeek</span>
-            </div>
+          <!-- One row: the connection pip, the session tabs, and the panel's own
+               controls docked at the right edge. -->
+          <div class="chat-bar">
+            <span class="dot" id="chat-dot" title="Connection status"></span>
+
+            <!-- One tab per conversation. Each tab owns its own transcript,
+                 request, attachment and draft; only the active one is shown. -->
+            <div class="chat-tabs" id="chat-tabs" role="tablist" aria-label="Chat sessions"></div>
+
             <span class="chat-head-actions">
               <button class="mini-btn" id="btn-new-chat" title="New chat session (Ctrl+Shift+K)" aria-label="New chat session">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 3v10M3 8h10"/></svg>
@@ -358,10 +362,6 @@
               </button>
             </span>
           </div>
-
-          <!-- One tab per conversation. Each tab owns its own transcript,
-               request, attachment and draft; only the active one is shown. -->
-          <div class="chat-tabs" id="chat-tabs" role="tablist" aria-label="Chat sessions"></div>
 
           <div class="chat-scroll" id="chat-scroll">
             <div class="chat-empty" id="chat-empty">

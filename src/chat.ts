@@ -5,7 +5,7 @@ import {
   type ChatMessage,
   type ReasoningEffort,
 } from './deepseek'
-import { shortModelName, vendorOf } from './models'
+import { shortModelName } from './models'
 import { renderMarkdown } from './markdown'
 
 export type ChatStatus = 'idle' | 'ready' | 'busy' | 'error'
@@ -187,7 +187,6 @@ export class ChatPanel {
     selection: HTMLButtonElement
     selectionNote: HTMLElement
     model: HTMLElement
-    vendor: HTMLElement
     pin: HTMLElement
     pinLabel: HTMLElement
     vizBar: HTMLElement
@@ -222,7 +221,6 @@ export class ChatPanel {
       selection: q('ctx-selection') as HTMLButtonElement,
       selectionNote: q('ctx-selection-note'),
       model: q('chat-model'),
-      vendor: q('chat-vendor'),
       pin: q('ctx-pin'),
       pinLabel: q('ctx-pin-label'),
       vizBar: q('ctx-viz-bar'),
@@ -619,10 +617,6 @@ export class ChatPanel {
     const id = model || DEFAULT_MODEL
     this.el.model.textContent = shortModelName(id)
     this.el.model.title = id
-    // The header used to read "DeepSeek" unconditionally; now that any model
-    // is selectable, the label has to follow the picker or it lies.
-    this.el.vendor.textContent = vendorOf(id)
-    this.el.vendor.title = id
   }
 
   setActiveFile(): void {
