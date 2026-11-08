@@ -445,7 +445,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   );
   background-repeat: no-repeat;
   background-position: 13px top;
-  background-size: calc((var(--d, 1) - 1) * 12px + 1px) 100%;
+  /* max() keeps the width non-negative: an invalid size would fall back to
+     `auto` and repeat the gradient across the whole row. */
+  background-size: calc(max(var(--d, 1) - 1, 0) * 12px + 1px) 100%;
 }
 
 .pane-pad { padding: 6px 10px; display: flex; flex-direction: column; gap: 6px; overflow: auto; }

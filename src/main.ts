@@ -1413,9 +1413,11 @@ function renderTree(): void {
       row.className = 'row'
       row.style.paddingLeft = `${6 + depth * 12}px`
       // Indent guides: the CSS paints one line per ancestor level, so it needs
-      // the depth. Every nested row gets them; the root row above has none.
+      // the depth. Only nested rows get them — a depth 0 row has no ancestor
+      // marker to line up under, and a zero-width guide box would let the
+      // gradient repeat across the whole row instead.
       row.style.setProperty('--d', String(depth))
-      row.classList.add('guides')
+      if (depth > 0) row.classList.add('guides')
       row.setAttribute('role', 'treeitem')
       row.tabIndex = 0
       row.title = node.path
