@@ -257,22 +257,25 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 /* ── Body ──────────────────────────────────────────────────── */
 .body {
   display: grid;
-  grid-template-columns: 48px var(--sidebar-w) 1fr 4px minmax(0, var(--chat-w));
+  grid-template-columns: 48px var(--sidebar-w) 4px 1fr 4px minmax(0, var(--chat-w));
   min-height: 0;
   overflow: hidden;
   position: relative;
 }
-.body.chat-collapsed { grid-template-columns: 48px var(--sidebar-w) 1fr 0 0; }
+.body.chat-collapsed { grid-template-columns: 48px var(--sidebar-w) 4px 1fr 0 0; }
 .body.chat-collapsed .chat, .body.chat-collapsed .chat-resizer { display: none; }
 /* Collapsing the side bar closes its grid column. It must stay *in* the grid:
    `display: none` on a middle column drops the item out of flow, so every later
    item shifts one track left and the editor lands in the 0px column. A zero
-   track plus the side bar's own `overflow: hidden` is what hides it. */
-.body.sidebar-collapsed { grid-template-columns: 48px 0 1fr 4px minmax(0, var(--chat-w)); }
-.body.sidebar-collapsed.chat-collapsed { grid-template-columns: 48px 0 1fr 0 0; }
+   track plus the side bar's own `overflow: hidden` is what hides it. The side
+   bar's resizer column collapses the same way (and goes inert), never
+   `display: none`, for the same reason. */
+.body.sidebar-collapsed { grid-template-columns: 48px 0 0 1fr 4px minmax(0, var(--chat-w)); }
+.body.sidebar-collapsed.chat-collapsed { grid-template-columns: 48px 0 0 1fr 0 0; }
 /* Its 1px separator would otherwise remain as a sliver; the activity bar
    already draws that border. */
 .body.sidebar-collapsed .sidebar { border-right: 0; }
+.body.sidebar-collapsed .sidebar-resizer { pointer-events: none; }
 
 /* Activity bar */
 .activitybar {
@@ -724,12 +727,16 @@ kbd {
   border-radius: 4px; font: 11px var(--mono); color: var(--fg);
 }
 
-/* ── Chat resizer ──────────────────────────────────────────── */
-.chat-resizer {
+/* ── Chat / side bar resizers ──────────────────────────────── */
+.chat-resizer, .sidebar-resizer {
   background: var(--border); cursor: col-resize;
   transition: background 0.12s;
 }
-.chat-resizer:hover, .chat-resizer.is-dragging { background: var(--blue); }
+/* The side bar's divider is a middle grid column, so when the bar is collapsed
+   it is a 0px track rather than `display: none`; clipping keeps it invisible. */
+.sidebar-resizer { overflow: hidden; }
+.chat-resizer:hover, .chat-resizer.is-dragging,
+.sidebar-resizer:hover, .sidebar-resizer.is-dragging { background: var(--blue); }
 
 /* ── Chat panel ────────────────────────────────────────────── */
 .chat {
@@ -1199,7 +1206,7 @@ kbd {
   .body.chat-collapsed { grid-template-columns: 48px 1fr; }
   /* The side bar is a drawer here, never a collapsed column. */
   .body.sidebar-collapsed { grid-template-columns: 48px 1fr; }
-  .chat-resizer { display: none; }
+  .chat-resizer, .sidebar-resizer { display: none; }
 
   /* Both panels float above the editor, narrower than the screen. */
   .sidebar,

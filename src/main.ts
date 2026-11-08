@@ -224,6 +224,7 @@ const els = {
   quickList: $('quick-list'),
   toasts: $('toasts'),
   chatResizer: $('chat-resizer'),
+  sidebarResizer: $('sidebar-resizer'),
   scrim: $('scrim'),
   btnToggleRight: $('btn-toggle-right'),
   btnTheme: $('btn-theme'),
@@ -2029,38 +2030,69 @@ narrow.addEventListener('change', () => {
   relayout()
 })
 
-/* Resizer */
-let dragging = false
-els.chatResizer.addEventListener('pointerdown', (e) => {
-  dragging = true
-  els.chatResizer.classList.add('is-dragging')
-  els.chatResizer.setPointerCapture(e.pointerId)
-  document.body.style.cursor = 'col-resize'
-  document.body.style.userSelect = 'none'
-})
-els.chatResizer.addEventListener('pointermove', (e) => {
-  if (!dragging) return
-  const rect = els.body.getBoundingClientRect()
-  const width = Math.min(Math.max(rect.right - e.clientX, 280), Math.min(760, rect.width - 320))
-  document.documentElement.style.setProperty('--chat-w', `${width}px`)
-  ui.chatWidth = width
-  editor.layout()
-})
-const endDrag = (e: PointerEvent) => {
-  if (!dragging) return
-  dragging = false
-  els.chatResizer.classList.remove('is-dragging')
-  document.body.style.cursor = ''
-  document.body.style.userSelect = ''
-  try {
-    els.chatResizer.releasePointerCapture(e.pointerId)
-  } catch {
-    /* already released */
+/* Resizers — one pointer-capture drag loop per divider. `onResize` gets every
+   move while the drag is live; `onDone` fires once on release, which is where a
+   new width is persisted. */
+function installResizer(
+  el: HTMLElement,
+  onResize: (e: PointerEvent) => void,
+  onDone: () => void,
+): void {
+  let dragging = false
+  el.addEventListener('pointerdown', (e) => {
+    dragging = true
+    el.classList.add('is-dragging')
+    el.setPointerCapture(e.pointerId)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  })
+  el.addEventListener('pointermove', (e) => {
+    if (!dragging) return
+    onResize(e)
+  })
+  const endDrag = (e: PointerEvent) => {
+    if (!dragging) return
+    dragging = false
+    el.classList.remove('is-dragging')
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    try {
+      el.releasePointerCapture(e.pointerId)
+    } catch {
+      /* already released */
+    }
+    onDone()
   }
-  saveUi(ui)
+  el.addEventListener('pointerup', endDrag)
+  el.addEventListener('pointercancel', endDrag)
 }
-els.chatResizer.addEventListener('pointerup', endDrag)
-els.chatResizer.addEventListener('pointercancel', endDrag)
+
+/* Chat panel: measured from the right edge, so it grows leftwards. */
+installResizer(
+  els.chatResizer,
+  (e) => {
+    const rect = els.body.getBoundingClientRect()
+    const width = Math.min(Math.max(rect.right - e.clientX, 280), Math.min(760, rect.width - 320))
+    document.documentElement.style.setProperty('--chat-w', `${width}px`)
+    ui.chatWidth = width
+    editor.layout()
+  },
+  () => saveUi(ui),
+)
+
+/* Side bar: measured from the activity bar's right edge (48px), so it grows
+   rightwards. Same clamps as the Settings row for workbench.sideBarWidth. */
+installResizer(
+  els.sidebarResizer,
+  (e) => {
+    const rect = els.body.getBoundingClientRect()
+    const width = Math.min(Math.max(e.clientX - rect.left - 48, 160), Math.min(500, rect.width - 320))
+    document.documentElement.style.setProperty('--sidebar-w', `${width}px`)
+    ui.sidebarWidth = width
+    editor.layout()
+  },
+  () => saveUi(ui),
+)
 
 /* ══════════════════════════════════════════════════════════════
    File loading

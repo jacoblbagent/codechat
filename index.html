@@ -72,26 +72,28 @@
       #app { height: 100vh; display: grid; grid-template-rows: 35px 1fr 22px; }
       .body {
         display: grid;
-        grid-template-columns: 48px var(--sidebar-w) 1fr 4px minmax(0, var(--chat-w));
+        grid-template-columns: 48px var(--sidebar-w) 4px 1fr 4px minmax(0, var(--chat-w));
         min-height: 0; overflow: hidden;
       }
-      .body.chat-collapsed { grid-template-columns: 48px var(--sidebar-w) 1fr 0 0; }
+      .body.chat-collapsed { grid-template-columns: 48px var(--sidebar-w) 4px 1fr 0 0; }
       .body.chat-collapsed .chat, .body.chat-collapsed .chat-resizer { display: none; }
       /* The same two states again, keyed off <html>: the pre-paint script can
          set those attributes before .body has been parsed, and main.ts keeps
          them in step with the classes, so the live rules below and these agree
          whatever the first frame shows. */
-      [data-chat-collapsed] .body { grid-template-columns: 48px var(--sidebar-w) 1fr 0 0; }
-      [data-sidebar-collapsed] .body { grid-template-columns: 48px 0 1fr 4px minmax(0, var(--chat-w)); }
-      [data-sidebar-collapsed][data-chat-collapsed] .body { grid-template-columns: 48px 0 1fr 0 0; }
+      [data-chat-collapsed] .body { grid-template-columns: 48px var(--sidebar-w) 4px 1fr 0 0; }
+      [data-sidebar-collapsed] .body { grid-template-columns: 48px 0 0 1fr 4px minmax(0, var(--chat-w)); }
+      [data-sidebar-collapsed][data-chat-collapsed] .body { grid-template-columns: 48px 0 0 1fr 0 0; }
       [data-sidebar-collapsed] .body .sidebar { border-right: 0; }
+      [data-sidebar-collapsed] .body .sidebar-resizer { pointer-events: none; }
       [data-chat-collapsed] .chat, [data-chat-collapsed] .chat-resizer { display: none; }
       .titlebar { background: var(--bg-title); border-bottom: 1px solid var(--border); }
       .activitybar { background: var(--bg-activity); border-right: 1px solid var(--border); }
       .sidebar { background: var(--bg-side); border-right: 1px solid var(--border); min-width: 0; overflow: hidden; }
       .editor-area { background: var(--bg); min-width: 0; overflow: hidden; }
       .tabs { height: 35px; background: var(--bg-side); flex: none; }
-      .chat-resizer { background: var(--border); }
+      .chat-resizer, .sidebar-resizer { background: var(--border); }
+      .sidebar-resizer { overflow: hidden; }
       .chat { background: var(--bg-side); border-left: 1px solid var(--border); min-width: 0; overflow: hidden; }
       .statusbar { background: var(--bg-status); color: var(--sb-fg); }
       @media (max-width: 900px) {
@@ -116,7 +118,7 @@
         .chat { right: 0; width: min(80vw, 330px); transform: translateX(102%); }
         .body.sidebar-open .sidebar, .body.chat-open .chat { transform: none; visibility: visible; }
         .body.chat-collapsed .chat { display: flex; }
-        .chat-resizer { display: none; }
+        .chat-resizer, .sidebar-resizer { display: none; }
         .scrim { position: absolute; inset: 0; left: 48px; z-index: 40; background: rgba(0, 0, 0, 0.5); }
         .scrim[hidden] { display: none; }
       }
@@ -269,6 +271,9 @@
           </section>
 
         </aside>
+
+        <!-- Side bar resizer -->
+        <div class="sidebar-resizer" id="sidebar-resizer" title="Drag to resize" role="separator" aria-orientation="vertical"></div>
 
         <!-- Editor area -->
         <main class="editor-area">
