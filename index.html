@@ -405,21 +405,13 @@
               </div>
             </div>
 
-            <div class="compose-field">
-              <textarea id="chat-input" class="chat-input" rows="1" placeholder="Ask DeepSeek…" title="Enter to send · Shift+Enter for a newline" aria-label="Message"></textarea>
-              <button class="btn btn-primary compose-send" id="btn-send" title="Send (Enter)" aria-label="Send">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 12.5V3.5M4 7.5L8 3.5l4 4"/></svg>
-              </button>
-            </div>
+            <textarea id="chat-input" class="chat-input" rows="1" placeholder="Ask about your code…" title="Enter to send · Shift+Enter for a newline" aria-label="Message"></textarea>
 
+            <!-- Controls row: the thinking level pinned left, the model named in
+                 the middle, stop/send pinned right. -->
             <div class="compose-row">
-              <button class="btn btn-ghost compose-attach" id="btn-add-selection" title="Attach the code you have selected (Ctrl+L)">
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>
-                Selection
-              </button>
               <span class="think-sel" title="How much reasoning the model does before it answers">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.35" aria-hidden="true"><path d="M8 1.8a3.4 3.4 0 0 0-2 6.15c.5.35.8.9.8 1.5v.35h2.4v-.35c0-.6.3-1.15.8-1.5A3.4 3.4 0 0 0 8 1.8Z"/><path d="M6.6 11.9h2.8M7.2 13.7h1.6"/></svg>
-                <label class="think-label" for="think-select">Thinking</label>
                 <select id="think-select" class="think-select" aria-label="Thinking level">
                   <option value="off">Off</option>
                   <option value="low">Low</option>
@@ -429,10 +421,15 @@
               </span>
               <button class="chat-model" id="btn-model" type="button" title="Change model" aria-label="Change model">
                 <span id="chat-model">v4.1-flash</span>
-                <svg class="chat-model-chev" width="8" height="8" viewBox="0 0 8 8" aria-hidden="true"><path d="M1 2.5L4 5.5L7 2.5" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
               </button>
-              <span class="compose-hint" id="compose-hint">Enter to send</span>
-              <button class="btn btn-ghost" id="btn-stop" hidden>Stop</button>
+              <span class="compose-actions">
+                <button class="compose-stop" id="btn-stop" type="button" title="Stop" aria-label="Stop" hidden>
+                  <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor"/></svg>
+                </button>
+                <button class="compose-send" id="btn-send" type="button" title="Send (Enter)" aria-label="Send">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 13V3.5M4 7.5L8 3.5l4 4"/></svg>
+                </button>
+              </span>
             </div>
           </div>
         </aside>

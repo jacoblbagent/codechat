@@ -141,6 +141,9 @@ const SESSIONS_KEY = 'codechat.sessions.v1'
 const SESSION_LIMIT = 20
 /** Stored transcripts are bounded — localStorage is ~5 MB for the whole origin. */
 const TURNS_KEPT = 60
+/** What the message box says when it is empty; a leading slash swaps it for a
+ *  command hint, so the row the hint used to occupy is gone. */
+const INPUT_PLACEHOLDER = 'Ask about your code…'
 
 /**
  * "Thinking…" while it streams, then how long it took — falling back to the
@@ -181,7 +184,6 @@ export class ChatPanel {
     input: HTMLTextAreaElement
     send: HTMLButtonElement
     stop: HTMLButtonElement
-    hint: HTMLElement
     include: HTMLButtonElement
     includeNote: HTMLElement
     selection: HTMLButtonElement
@@ -215,7 +217,6 @@ export class ChatPanel {
       input: q('chat-input') as HTMLTextAreaElement,
       send: q('btn-send') as HTMLButtonElement,
       stop: q('btn-stop') as HTMLButtonElement,
-      hint: q('compose-hint'),
       include: q('ctx-include') as HTMLButtonElement,
       includeNote: q('ctx-include-note'),
       selection: q('ctx-selection') as HTMLButtonElement,
@@ -514,9 +515,9 @@ export class ChatPanel {
     })
     this.el.input.addEventListener('input', () => {
       this.autoGrow()
-      this.el.hint.textContent = this.el.input.value.trimStart().startsWith('/')
+      this.el.input.placeholder = this.el.input.value.trimStart().startsWith('/')
         ? 'Slash command — Enter to run'
-        : 'Enter to send · Shift+Enter newline'
+        : INPUT_PLACEHOLDER
     })
 
     document.getElementById('btn-new-chat')?.addEventListener('click', () => this.newChat())
@@ -978,10 +979,11 @@ export class ChatPanel {
     const session = this.session
     if (!session) return
     this.el.stop.hidden = !session.streaming
+    this.el.send.hidden = session.streaming
     this.el.send.disabled = session.streaming
-    this.el.hint.textContent = this.el.input.value.trimStart().startsWith('/')
+    this.el.input.placeholder = this.el.input.value.trimStart().startsWith('/')
       ? 'Slash command — Enter to run'
-      : 'Enter to send · Shift+Enter newline'
+      : INPUT_PLACEHOLDER
   }
 
   /* ── rendering ────────────────────────────────────────────── */
