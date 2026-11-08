@@ -1024,6 +1024,7 @@ kbd {
 .compose-row .think-sel { flex: none; min-width: 0; }
 .compose-actions {
   flex: none; display: inline-flex; align-items: center; gap: 6px;
+  margin-left: 6px; /* extra breathing room between the model chip and send */
 }
 
 /* Solid round send; the stop button takes the same slot while a stream runs. */
