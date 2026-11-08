@@ -1072,6 +1072,13 @@ kbd {
 /* Controls keep their size; if the row runs out of width they wrap to a second
    line rather than being compressed. */
 .compose-row .btn { flex: none; }
+/* The model badge lives with the other per-request controls now, so it takes
+   the row's control height and border rather than the header pill's. */
+.compose-row .chat-model {
+  flex: none; height: 22px; padding: 0 7px; max-width: 170px;
+  border-radius: 4px; border-color: var(--border-strong);
+  color: var(--fg); font-family: var(--ui);
+}
 .compose-attach { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; font-size: 11px; }
 .compose-hint {
   margin-left: auto; font-size: 11px; color: var(--fg-dim);
