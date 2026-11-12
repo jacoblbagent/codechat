@@ -1531,6 +1531,7 @@ function markMatches(text: string, needle: string): string {
  *  leading `…` when the start of the line was dropped. */
 function snippetHtml(hit: SearchHit, needle: string, chars: number): string {
   const full = hit.text.replace(/\r$/, '')
+  const lowerFull = full.toLowerCase()
   const lead = full.length - full.trimStart().length
   const want = Math.min(hit.col - snippetLead(chars), Math.max(lead, full.length - chars))
   let start = Math.max(lead, want)
@@ -1542,7 +1543,14 @@ function snippetHtml(hit: SearchHit, needle: string, chars: number): string {
     if (back >= lead && start - back <= 24) start = back + 1
     else if (start - lead <= 24) start = lead
   }
-  return (start > lead ? '…' : '') + markMatches(full.slice(start, start + chars), needle)
+  /* Never end the window inside a match: a half-shown `useStat` reads as a
+     broken highlight, so a partial occurrence at the tail is dropped instead
+     of drawn. The row's own match sits a third of the way in, so it is whole. */
+  let end = start + chars
+  const lowerNeedle = needle.toLowerCase()
+  const boundary = lowerFull.indexOf(lowerNeedle, Math.max(start, end - lowerNeedle.length + 1))
+  if (boundary !== -1 && boundary < end && boundary - start > 4) end = boundary
+  return (start > lead ? '…' : '') + markMatches(full.slice(start, end), needle)
 }
 
 const TWISTY =

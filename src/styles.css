@@ -522,8 +522,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   white-space: nowrap; overflow: hidden;
 }
 .search-match:hover { background: var(--bg-hover); }
+/* 4ch is what keeps every colon on one line: a file with four-digit line
+   numbers still right-aligns into the same gutter. */
 .search-match .ln {
-  flex: none; min-width: 3ch; text-align: right; color: var(--fg-dim);
+  flex: none; min-width: 4ch; text-align: right; color: var(--fg-dim);
 }
 .search-match .ln::after { content: ':'; }
 .search-match .snip { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
