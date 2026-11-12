@@ -1866,6 +1866,27 @@ function setView(view: ViewName): void {
   for (const btn of document.querySelectorAll<HTMLElement>('.act-btn[data-view]')) {
     btn.classList.toggle('is-active', btn.dataset.view === view)
   }
+  // Switching to Search should put the caret in the field, so the icon click is
+  // one step instead of two. Other views leave focus alone.
+  if (view === 'search') focusSearchField()
+}
+
+/**
+ * Focus the workspace search field. On a narrow screen the drawer stays
+ * `visibility: hidden` until its 0.2s open transition ends, and a focus taken
+ * while it is hidden is silently dropped, so retry on rAF until it sticks.
+ * On desktop the first call lands and the loop never starts.
+ */
+function focusSearchField(): void {
+  const input = els.searchInput
+  input.focus()
+  let frames = 0
+  const retry = (): void => {
+    if (document.activeElement === input) return
+    input.focus()
+    if (document.activeElement !== input && ++frames < 24) requestAnimationFrame(retry)
+  }
+  requestAnimationFrame(retry)
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -2009,6 +2030,9 @@ for (const btn of document.querySelectorAll<HTMLElement>('.act-btn[data-view]'))
       }
       setView(view)
       setSidebarOpen(true)
+      // The drawer is off-canvas until it opens, so a focus taken in setView
+      // lands on a hidden field and is dropped. Take it again now it is shown.
+      if (view === 'search') focusSearchField()
       return
     }
     if (btn.classList.contains('is-active') && !isSidebarCollapsed()) {
