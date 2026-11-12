@@ -57,6 +57,11 @@
   --red: #e06c75;
   --yellow: #e5c07b;
   --mark-bg: rgba(234, 92, 0, 0.33);
+  /* Search results: the count badge and the box behind the matched text. The
+     highlight is a plain grey wash, not the orange find-match colour — these
+     are result rows, and the reference look keeps them quiet. */
+  --bg-badge: #3a3f4b;
+  --search-match: #4b5263;
   --red-soft: rgba(224, 108, 117, 0.12);
   --glow-green: rgba(152, 195, 121, 0.55);
 
@@ -135,6 +140,8 @@
   --red: #e45649;
   --yellow: #c18401;
   --mark-bg: rgba(255, 214, 0, 0.5);
+  --bg-badge: #cfcfd2;
+  --search-match: #c9d6e3;
   --red-soft: rgba(228, 86, 73, 0.1);
   --glow-green: rgba(80, 161, 79, 0.45);
 
@@ -471,12 +478,58 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .btn-ghost { background: transparent; border: 1px solid var(--border-soft); }
 .btn-ghost:hover { background: var(--hover-overlay-soft); }
 
-.search-results { display: flex; flex-direction: column; }
-.search-hit { padding: 4px 6px; border-radius: 3px; cursor: pointer; }
-.search-hit:hover { background: var(--bg-hover); }
-.search-hit .file { font-size: 12px; color: var(--blue); }
-.search-hit .line { font: 11px/1.5 var(--mono); color: var(--fg-dim); }
-.search-hit mark { background: var(--mark-bg); color: var(--fg-bright); }
+/* Search results — one collapsible group per file, VS Code's tree shape: the
+   file name in bright text beside its dim folder path, the match count in a
+   badge at the right edge, and one clipped code line per hit with the query
+   marked. */
+.search-results { display: flex; flex-direction: column; gap: 1px; }
+.search-group { display: flex; flex-direction: column; }
+.search-file {
+  display: flex; align-items: center; gap: 5px;
+  height: 22px; padding: 0 6px; border-radius: 3px;
+  cursor: pointer; white-space: nowrap; user-select: none; overflow: hidden;
+  font-size: 12.5px; color: var(--fg-bright);
+}
+.search-file:hover { background: var(--bg-hover); }
+/* Right chevron, turned down while the group is open — the fold state is the
+   only difference, so the two states cannot drift apart. */
+.search-file .twisty {
+  width: 14px; flex: none; color: var(--fg-dim);
+  display: grid; place-items: center;
+  transform: rotate(90deg); transition: transform 0.1s;
+}
+.search-group.is-collapsed .search-file .twisty { transform: none; }
+.search-file .ico { flex: none; display: grid; place-items: center; }
+/* The name keeps its width and the folder path gives way: VS Code elides the
+   path long before the file name, so the name must not be a shrink candidate.
+   max-width stops a very long name from starving the path entirely. */
+.search-file .name {
+  flex: 0 0 auto; max-width: 70%; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.search-file .dir {
+  flex: 1 1 auto; min-width: 0; margin-left: 1px;
+  overflow: hidden; text-overflow: ellipsis;
+  font-size: 11.5px; color: var(--fg-dim);
+}
+.search-file .count {
+  flex: none; margin-left: 4px; padding: 0 5px;
+  min-width: 18px; height: 15px; border-radius: 4px;
+  background: var(--bg-badge); color: var(--fg-bright);
+  font-size: 10.5px; line-height: 15px; text-align: center;
+}
+.search-group.is-collapsed .search-lines { display: none; }
+/* The snippet is one unbroken code line: the tail is clipped instead of
+   wrapped, so a long line never pushes the panel wider. */
+.search-match {
+  padding: 1px 6px 1px 25px; border-radius: 3px; cursor: pointer;
+  font: 11.5px/17px var(--mono); color: var(--fg);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.search-match:hover { background: var(--bg-hover); }
+.search-match mark {
+  background: var(--search-match); color: inherit; border-radius: 2px;
+}
 
 /* Editor area */
 .editor-area { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }

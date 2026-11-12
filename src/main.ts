@@ -1496,18 +1496,58 @@ els.searchInput.addEventListener('input', () => {
   searchTimer = window.setTimeout(runSearch, 160)
 })
 
-function runSearch(): void {
-  const q = els.searchInput.value
-  els.searchResults.innerHTML = ''
-  if (!q.trim()) return
+/* VS Code's result rows show one clipped line per hit, so the snippet window
+   keeps this much context before the match and roughly this many characters
+   in total; the tail is clipped by CSS `text-overflow`. */
+const SNIPPET_LEAD = 12
+const SNIPPET_CHARS = 64
 
-  const hits = workspace.search(q)
+/** Escape `text` for HTML and wrap every match of `needle` in `<mark>`. */
+function markMatches(text: string, needle: string): string {
+  const re = new RegExp(`(${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
+  let out = ''
+  let last = 0
+  for (const m of text.matchAll(re)) {
+    const at = m.index ?? 0
+    out += escapeHtml(text.slice(last, at)) + `<mark>${escapeHtml(m[0])}</mark>`
+    last = at + m[0].length
+  }
+  return out + escapeHtml(text.slice(last))
+}
+
+/** One result line: the line's own text, slid so the match is visible, with a
+ *  leading `…` when the start of the line was dropped. */
+function snippetHtml(hit: SearchHit, needle: string): string {
+  const full = hit.text.replace(/\r$/, '')
+  const lead = full.length - full.trimStart().length
+  const want = Math.min(hit.col - SNIPPET_LEAD, Math.max(lead, full.length - SNIPPET_CHARS))
+  let start = Math.max(lead, want)
+  /* Snap the cut back to a word boundary so a snippet never opens mid-word.
+     With no space to land on, a cut this close to the line start is not worth
+     keeping: show the line from its first character instead. */
+  if (start > lead) {
+    const back = full.lastIndexOf(' ', start)
+    if (back >= lead && start - back <= 24) start = back + 1
+    else if (start - lead <= 24) start = lead
+  }
+  return (start > lead ? '…' : '') + markMatches(full.slice(start, start + SNIPPET_CHARS), needle)
+}
+
+const TWISTY =
+  '<span class="twisty"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" ' +
+  'stroke="currentColor" stroke-width="1.6"><path d="M6 4l4 4-4 4"/></svg></span>'
+
+function runSearch(): void {
+  const needle = els.searchInput.value.trim()
+  els.searchResults.innerHTML = ''
+  if (!needle) return
+
+  const hits = workspace.search(needle)
   if (!hits.length) {
     els.searchResults.innerHTML = '<div class="hint">No matches.</div>'
     return
   }
 
-  const pattern = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
   const grouped = new Map<string, SearchHit[]>()
   for (const hit of hits) {
     const list = grouped.get(hit.path) ?? []
@@ -1516,25 +1556,52 @@ function runSearch(): void {
   }
 
   for (const [path, list] of grouped) {
+    const slash = path.lastIndexOf('/')
+    const name = slash === -1 ? path : path.slice(slash + 1)
+
+    const group = document.createElement('div')
+    group.className = 'search-group'
+
     const head = document.createElement('div')
-    head.className = 'search-hit'
-    head.innerHTML = `<div class="file">${escapeHtml(path)} <span class="muted">(${list.length})</span></div>`
-    els.searchResults.appendChild(head)
-    for (const hit of list.slice(0, 20)) {
+    head.className = 'search-file'
+    head.title = path
+    head.setAttribute('role', 'treeitem')
+    head.setAttribute('aria-expanded', 'true')
+    head.innerHTML =
+      TWISTY +
+      `<span class="ico">${fileIcon(name)}</span>` +
+      `<span class="name">${escapeHtml(name)}</span>` +
+      `<span class="dir">${escapeHtml(path.slice(0, Math.max(slash, 0)))}</span>` +
+      `<span class="count">${list.length}</span>`
+
+    const body = document.createElement('div')
+    body.className = 'search-lines'
+    for (const hit of list) {
       const row = document.createElement('div')
-      row.className = 'search-hit'
-      row.innerHTML = `<div class="line">${hit.line}: ${escapeHtml(hit.text).replace(pattern, '<mark>$1</mark>')}</div>`
-      row.addEventListener('click', () => {
-        openFile(hit.path)
-        setTimeout(() => {
-          editor.revealLineInCenter(hit.line)
-          editor.setPosition({ lineNumber: hit.line, column: 1 })
-          editor.focus()
-        }, 30)
-      })
-      els.searchResults.appendChild(row)
+      row.className = 'search-match'
+      row.title = `${name}:${hit.line}`
+      row.innerHTML = `<span class="snip">${snippetHtml(hit, needle)}</span>`
+      row.addEventListener('click', () => revealHit(hit))
+      body.appendChild(row)
     }
+
+    head.addEventListener('click', () => {
+      const folded = group.classList.toggle('is-collapsed')
+      head.setAttribute('aria-expanded', String(!folded))
+    })
+
+    group.append(head, body)
+    els.searchResults.appendChild(group)
   }
+}
+
+function revealHit(hit: SearchHit): void {
+  openFile(hit.path)
+  setTimeout(() => {
+    editor.revealLineInCenter(hit.line)
+    editor.setPosition({ lineNumber: hit.line, column: 1 })
+    editor.focus()
+  }, 30)
 }
 
 /* ══════════════════════════════════════════════════════════════

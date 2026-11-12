@@ -31,7 +31,10 @@ export interface TreeNode {
 export interface SearchHit {
   path: string
   line: number
+  /** The whole line, untrimmed — the snippet window slices it around `col`. */
   text: string
+  /** 0-based index of the first match inside `text`. */
+  col: number
 }
 
 /** One entry of a directory read — what `applyRefresh` folds into the workspace. */
@@ -591,10 +594,9 @@ export class Workspace {
       const lines = f.content.split('\n')
       for (let i = 0; i < lines.length; i++) {
         re.lastIndex = 0
-        if (re.test(lines[i])) {
-          hits.push({ path: f.path, line: i + 1, text: lines[i].trim().slice(0, 200) })
-          if (hits.length >= limit) return hits
-        }
+        const m = re.exec(lines[i])
+        if (m) hits.push({ path: f.path, line: i + 1, text: lines[i], col: m.index })
+        if (hits.length >= limit) return hits
       }
     }
     return hits
