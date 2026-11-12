@@ -1496,11 +1496,23 @@ els.searchInput.addEventListener('input', () => {
   searchTimer = window.setTimeout(runSearch, 160)
 })
 
-/* VS Code's result rows show one clipped line per hit, so the snippet window
-   keeps this much context before the match and roughly this many characters
-   in total; the tail is clipped by CSS `text-overflow`. */
-const SNIPPET_LEAD = 12
-const SNIPPET_CHARS = 64
+/* VS Code's result rows show one clipped line per hit. The window is sized to
+   the panel — a fixed character count would be cut off by the row's own
+   overflow in a narrow sidebar and take the match with it. 7.3px is the 12px
+   mono advance; the line-number column and the row's padding eat ~64px. */
+const SNIPPET_PX_PER_CHAR = 7.3
+const SNIPPET_CHROME_PX = 64
+
+function snippetChars(): number {
+  const width = els.searchResults.clientWidth || 240
+  return Math.max(12, Math.floor((width - SNIPPET_CHROME_PX) / SNIPPET_PX_PER_CHAR))
+}
+
+/** Context kept before the match: about a third of the window, so the match
+ *  sits inside the visible text rather than at its right edge. */
+function snippetLead(chars: number): number {
+  return Math.min(24, Math.max(4, Math.round(chars / 3)))
+}
 
 /** Escape `text` for HTML and wrap every match of `needle` in `<mark>`. */
 function markMatches(text: string, needle: string): string {
@@ -1517,10 +1529,10 @@ function markMatches(text: string, needle: string): string {
 
 /** One result line: the line's own text, slid so the match is visible, with a
  *  leading `…` when the start of the line was dropped. */
-function snippetHtml(hit: SearchHit, needle: string): string {
+function snippetHtml(hit: SearchHit, needle: string, chars: number): string {
   const full = hit.text.replace(/\r$/, '')
   const lead = full.length - full.trimStart().length
-  const want = Math.min(hit.col - SNIPPET_LEAD, Math.max(lead, full.length - SNIPPET_CHARS))
+  const want = Math.min(hit.col - snippetLead(chars), Math.max(lead, full.length - chars))
   let start = Math.max(lead, want)
   /* Snap the cut back to a word boundary so a snippet never opens mid-word.
      With no space to land on, a cut this close to the line start is not worth
@@ -1530,12 +1542,40 @@ function snippetHtml(hit: SearchHit, needle: string): string {
     if (back >= lead && start - back <= 24) start = back + 1
     else if (start - lead <= 24) start = lead
   }
-  return (start > lead ? '…' : '') + markMatches(full.slice(start, start + SNIPPET_CHARS), needle)
+  return (start > lead ? '…' : '') + markMatches(full.slice(start, start + chars), needle)
 }
 
 const TWISTY =
   '<span class="twisty"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" ' +
   'stroke="currentColor" stroke-width="1.6"><path d="M6 4l4 4-4 4"/></svg></span>'
+
+/** Fit every file label to its row. A path wider than the row is shortened
+ *  from the front on a directory boundary — `…/components/App.tsx` — because
+ *  the file name is what tells two rows apart; trimming the tail (what CSS
+ *  ellipsis alone does) leaves a column of identical prefixes. Measured from
+ *  the laid-out element, so it is right for any panel width or font. */
+function fitPathLabels(): void {
+  for (const el of els.searchResults.querySelectorAll<HTMLElement>('.search-file .path')) {
+    const full = el.dataset.path
+    if (!full || el.scrollWidth <= el.clientWidth + 1) continue
+    const parts = full.split('/')
+    for (let drop = 1; drop < parts.length; drop++) {
+      el.textContent = `…/${parts.slice(drop).join('/')}`
+      if (el.scrollWidth <= el.clientWidth + 1) break
+    }
+  }
+}
+
+/* The panel resizes by dragging, and the labels are fitted against its live
+   width, so a drag re-fits them without re-running the search. */
+let fitFrame = 0
+let fittedWidth = -1
+new ResizeObserver(() => {
+  if (els.searchResults.clientWidth === fittedWidth) return
+  fittedWidth = els.searchResults.clientWidth
+  cancelAnimationFrame(fitFrame)
+  fitFrame = requestAnimationFrame(fitPathLabels)
+}).observe(els.searchResults)
 
 function runSearch(): void {
   const needle = els.searchInput.value.trim()
@@ -1548,6 +1588,8 @@ function runSearch(): void {
     return
   }
 
+  const chars = snippetChars()
+
   const grouped = new Map<string, SearchHit[]>()
   for (const hit of hits) {
     const list = grouped.get(hit.path) ?? []
@@ -1556,8 +1598,7 @@ function runSearch(): void {
   }
 
   for (const [path, list] of grouped) {
-    const slash = path.lastIndexOf('/')
-    const name = slash === -1 ? path : path.slice(slash + 1)
+    const name = path.slice(path.lastIndexOf('/') + 1)
 
     const group = document.createElement('div')
     group.className = 'search-group'
@@ -1570,9 +1611,8 @@ function runSearch(): void {
     head.innerHTML =
       TWISTY +
       `<span class="ico">${fileIcon(name)}</span>` +
-      `<span class="name">${escapeHtml(name)}</span>` +
-      `<span class="dir">${escapeHtml(path.slice(0, Math.max(slash, 0)))}</span>` +
-      `<span class="count">${list.length}</span>`
+      `<span class="path" data-path="${escapeHtml(path)}">${escapeHtml(path)}</span>` +
+      `<span class="count">(${list.length})</span>`
 
     const body = document.createElement('div')
     body.className = 'search-lines'
@@ -1580,7 +1620,9 @@ function runSearch(): void {
       const row = document.createElement('div')
       row.className = 'search-match'
       row.title = `${name}:${hit.line}`
-      row.innerHTML = `<span class="snip">${snippetHtml(hit, needle)}</span>`
+      row.innerHTML =
+        `<span class="ln">${hit.line}</span>` +
+        `<span class="snip">${snippetHtml(hit, needle, chars)}</span>`
       row.addEventListener('click', () => revealHit(hit))
       body.appendChild(row)
     }
@@ -1593,6 +1635,8 @@ function runSearch(): void {
     group.append(head, body)
     els.searchResults.appendChild(group)
   }
+
+  fitPathLabels()
 }
 
 function revealHit(hit: SearchHit): void {
