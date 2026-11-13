@@ -1,4 +1,5 @@
 import { ChatPanel } from './chat'
+import { copyText } from './clipboard'
 import { DEFAULT_MODEL, type ReasoningEffort } from './deepseek'
 import {
   defineTheme,
@@ -1077,10 +1078,8 @@ function absolutePathFor(path: string): string {
 }
 
 function copyToClipboard(text: string, message: string): void {
-  void navigator.clipboard.writeText(text).then(
-    () => toast(message, 'ok'),
-    () => toast('Clipboard unavailable', 'err'),
-  )
+  // copyText owns the Clipboard API fallback; the toast only reports how it went.
+  void copyText(text).then((ok) => toast(ok ? message : 'Clipboard unavailable', ok ? 'ok' : 'err'))
 }
 
 /** Close every tab but one — the menu's tab, or all of them when null. */

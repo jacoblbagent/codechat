@@ -6,6 +6,7 @@ import {
   type ReasoningEffort,
 } from './deepseek'
 import { shortModelName } from './models'
+import { copyText } from './clipboard'
 import { renderMarkdown } from './markdown'
 
 export type ChatStatus = 'idle' | 'ready' | 'busy' | 'error'
@@ -679,9 +680,8 @@ export class ChatPanel {
       const copyMsg = origin.closest<HTMLElement>('[data-copy-msg]')
       if (copyMsg) {
         const idx = Number(copyMsg.dataset.copyMsg)
-        void navigator.clipboard.writeText(session.turns[idx]?.content ?? '').then(
-          () => this.deps.toast('Message copied', 'ok'),
-          () => this.deps.toast('Clipboard unavailable', 'err'),
+        void copyText(session.turns[idx]?.content ?? '').then((ok) =>
+          this.deps.toast(ok ? 'Message copied' : 'Clipboard unavailable', ok ? 'ok' : 'err'),
         )
       }
       return
@@ -695,9 +695,8 @@ export class ChatPanel {
     const lang = wrapper.querySelector('.codeblock-lang')?.textContent ?? 'ts'
 
     if (act === 'copy') {
-      void navigator.clipboard.writeText(code).then(
-        () => this.deps.toast('Code copied', 'ok'),
-        () => this.deps.toast('Clipboard unavailable', 'err'),
+      void copyText(code).then((ok) =>
+        this.deps.toast(ok ? 'Code copied' : 'Clipboard unavailable', ok ? 'ok' : 'err'),
       )
     } else if (act === 'insert') {
       this.deps.insertCode(code)
