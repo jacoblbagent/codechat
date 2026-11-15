@@ -2416,8 +2416,10 @@ async function reopenDirectory(handle: FileSystemDirectoryHandle): Promise<void>
  * `applyDirectory`, which replaces whatever is here.
  */
 const STARTER_URL = `${import.meta.env.BASE_URL}starter/moto-pass.json`
-/** The file the starter opens on: the app's route table and page switch. */
-const STARTER_ENTRY = 'web/src/App.tsx'
+/** The file the starter opens on: the app's route table and page switch. The
+    Moto Pass tree renamed `web/` to `client/`; the JSON is regenerated from that
+    repo, so this path has to follow it or the starter opens an arbitrary file. */
+const STARTER_ENTRY = 'client/src/App.tsx'
 
 async function loadStarterProject(): Promise<void> {
   try {
