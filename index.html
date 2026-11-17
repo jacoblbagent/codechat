@@ -23,7 +23,7 @@
         root.dataset.theme = ui.theme === 'light' ? 'light' : 'dark'
         if (typeof ui.chatWidth === 'number') root.style.setProperty('--chat-w', ui.chatWidth + 'px')
         if (typeof ui.sidebarWidth === 'number') root.style.setProperty('--sidebar-w', ui.sidebarWidth + 'px')
-        /* Attributes, not classes: .body does not exist yet. The rules below
+        /* Attributes, not classes: .workbench does not exist yet. The rules below
            read them, and main.ts keeps them in step with the real classes. */
         if (ui.chatCollapsed) root.setAttribute('data-chat-collapsed', '')
         if (ui.sidebarCollapsed) root.setAttribute('data-sidebar-collapsed', '')
@@ -70,22 +70,22 @@
       [data-theme='light'] .tb-btn .icon-moon { display: block; }
       .muted { color: var(--fg-dim); }
       #app { height: 100vh; display: grid; grid-template-rows: 35px 1fr 22px; }
-      .body {
+      .workbench {
         display: grid;
         grid-template-columns: 48px var(--sidebar-w) 4px 1fr 4px minmax(0, var(--chat-w));
         min-height: 0; overflow: hidden;
       }
-      .body.chat-collapsed { grid-template-columns: 48px var(--sidebar-w) 4px 1fr 0 0; }
-      .body.chat-collapsed .chat, .body.chat-collapsed .chat-resizer { display: none; }
+      .workbench.chat-collapsed { grid-template-columns: 48px var(--sidebar-w) 4px 1fr 0 0; }
+      .workbench.chat-collapsed .chat, .workbench.chat-collapsed .chat-resizer { display: none; }
       /* The same two states again, keyed off <html>: the pre-paint script can
-         set those attributes before .body has been parsed, and main.ts keeps
+         set those attributes before .workbench has been parsed, and main.ts keeps
          them in step with the classes, so the live rules below and these agree
          whatever the first frame shows. */
-      [data-chat-collapsed] .body { grid-template-columns: 48px var(--sidebar-w) 4px 1fr 0 0; }
-      [data-sidebar-collapsed] .body { grid-template-columns: 48px 0 0 1fr 4px minmax(0, var(--chat-w)); }
-      [data-sidebar-collapsed][data-chat-collapsed] .body { grid-template-columns: 48px 0 0 1fr 0 0; }
-      [data-sidebar-collapsed] .body .sidebar { border-right: 0; }
-      [data-sidebar-collapsed] .body .sidebar-resizer { pointer-events: none; }
+      [data-chat-collapsed] .workbench { grid-template-columns: 48px var(--sidebar-w) 4px 1fr 0 0; }
+      [data-sidebar-collapsed] .workbench { grid-template-columns: 48px 0 0 1fr 4px minmax(0, var(--chat-w)); }
+      [data-sidebar-collapsed][data-chat-collapsed] .workbench { grid-template-columns: 48px 0 0 1fr 0 0; }
+      [data-sidebar-collapsed] .workbench .sidebar { border-right: 0; }
+      [data-sidebar-collapsed] .workbench .sidebar-resizer { pointer-events: none; }
       [data-chat-collapsed] .chat, [data-chat-collapsed] .chat-resizer { display: none; }
       .titlebar { background: var(--bg-title); border-bottom: 1px solid var(--border); }
       .activitybar { background: var(--bg-activity); border-right: 1px solid var(--border); }
@@ -100,24 +100,24 @@
         /* Only the activity bar and editor are laid out inline; both side
            panels become off-canvas drawers so they never eat the screen. */
         #app { height: 100dvh; }
-        .body { grid-template-columns: 48px 1fr; position: relative; }
-        .body.chat-collapsed { grid-template-columns: 48px 1fr; }
+        .workbench { grid-template-columns: 48px 1fr; position: relative; }
+        .workbench.chat-collapsed { grid-template-columns: 48px 1fr; }
         /* Neither state changes the columns here — both panels are drawers —
            and the chat must stay in the DOM to slide in, so undo the display
            rule the desktop attributes set. */
-        [data-chat-collapsed] .body,
-        [data-sidebar-collapsed] .body,
-        [data-sidebar-collapsed][data-chat-collapsed] .body { grid-template-columns: 48px 1fr; }
-        [data-chat-collapsed] .body .chat { display: flex; }
-        [data-sidebar-collapsed] .body .sidebar { border-right: 1px solid var(--border); }
+        [data-chat-collapsed] .workbench,
+        [data-sidebar-collapsed] .workbench,
+        [data-sidebar-collapsed][data-chat-collapsed] .workbench { grid-template-columns: 48px 1fr; }
+        [data-chat-collapsed] .workbench .chat { display: flex; }
+        [data-sidebar-collapsed] .workbench .sidebar { border-right: 1px solid var(--border); }
         .sidebar, .chat {
           position: absolute; top: 0; bottom: 0; z-index: 50;
           visibility: hidden;
         }
         .sidebar { left: 48px; width: min(74vw, 290px); transform: translateX(calc(-100% - 48px)); }
         .chat { right: 0; width: min(80vw, 330px); transform: translateX(102%); }
-        .body.sidebar-open .sidebar, .body.chat-open .chat { transform: none; visibility: visible; }
-        .body.chat-collapsed .chat { display: flex; }
+        .workbench.sidebar-open .sidebar, .workbench.chat-open .chat { transform: none; visibility: visible; }
+        .workbench.chat-collapsed .chat { display: flex; }
         .chat-resizer, .sidebar-resizer { display: none; }
         .scrim { position: absolute; inset: 0; left: 48px; z-index: 40; background: rgba(0, 0, 0, 0.5); }
         .scrim[hidden] { display: none; }
@@ -189,7 +189,7 @@
       </header>
 
       <!-- ══════════ Body ══════════ -->
-      <div class="body">
+      <div class="workbench">
         <!-- Activity bar -->
         <nav class="activitybar" aria-label="Activity bar">
           <button class="act-btn is-active" data-view="explorer" title="Explorer" aria-label="Explorer">

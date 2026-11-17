@@ -261,27 +261,27 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 [data-theme='light'] .tb-btn .icon-moon { display: block; }
 
 /* ── Body ──────────────────────────────────────────────────── */
-.body {
+.workbench {
   display: grid;
   grid-template-columns: 48px var(--sidebar-w) 4px 1fr 4px minmax(0, var(--chat-w));
   min-height: 0;
   overflow: hidden;
   position: relative;
 }
-.body.chat-collapsed { grid-template-columns: 48px var(--sidebar-w) 4px 1fr 0 0; }
-.body.chat-collapsed .chat, .body.chat-collapsed .chat-resizer { display: none; }
+.workbench.chat-collapsed { grid-template-columns: 48px var(--sidebar-w) 4px 1fr 0 0; }
+.workbench.chat-collapsed .chat, .workbench.chat-collapsed .chat-resizer { display: none; }
 /* Collapsing the side bar closes its grid column. It must stay *in* the grid:
    `display: none` on a middle column drops the item out of flow, so every later
    item shifts one track left and the editor lands in the 0px column. A zero
    track plus the side bar's own `overflow: hidden` is what hides it. The side
    bar's resizer column collapses the same way (and goes inert), never
    `display: none`, for the same reason. */
-.body.sidebar-collapsed { grid-template-columns: 48px 0 0 1fr 4px minmax(0, var(--chat-w)); }
-.body.sidebar-collapsed.chat-collapsed { grid-template-columns: 48px 0 0 1fr 0 0; }
+.workbench.sidebar-collapsed { grid-template-columns: 48px 0 0 1fr 4px minmax(0, var(--chat-w)); }
+.workbench.sidebar-collapsed.chat-collapsed { grid-template-columns: 48px 0 0 1fr 0 0; }
 /* Its 1px separator would otherwise remain as a sliver; the activity bar
    already draws that border. */
-.body.sidebar-collapsed .sidebar { border-right: 0; }
-.body.sidebar-collapsed .sidebar-resizer { pointer-events: none; }
+.workbench.sidebar-collapsed .sidebar { border-right: 0; }
+.workbench.sidebar-collapsed .sidebar-resizer { pointer-events: none; }
 
 /* Activity bar */
 .activitybar {
@@ -826,8 +826,8 @@ kbd {
    pointer: pointer capture is what keeps the drag loop alive, and Chromium
    drops it once the capture target stops being rendered or hit-tested. So a
    divider stays live for the rest of the drag even after its panel closed. */
-.body.chat-collapsed .chat-resizer.is-dragging { display: block; }
-.body.sidebar-collapsed .sidebar-resizer.is-dragging { pointer-events: auto; }
+.workbench.chat-collapsed .chat-resizer.is-dragging { display: block; }
+.workbench.sidebar-collapsed .sidebar-resizer.is-dragging { pointer-events: auto; }
 
 /* ── Chat panel ────────────────────────────────────────────── */
 .chat {
@@ -1278,10 +1278,10 @@ body.is-tab-dragging .chat-tab-x { cursor: grabbing; }
   .titlebar-right { flex: none; }
 
   /* Only the activity bar and the editor stay in the layout. */
-  .body { grid-template-columns: 48px 1fr; }
-  .body.chat-collapsed { grid-template-columns: 48px 1fr; }
+  .workbench { grid-template-columns: 48px 1fr; }
+  .workbench.chat-collapsed { grid-template-columns: 48px 1fr; }
   /* The side bar is a drawer here, never a collapsed column. */
-  .body.sidebar-collapsed { grid-template-columns: 48px 1fr; }
+  .workbench.sidebar-collapsed { grid-template-columns: 48px 1fr; }
   .chat-resizer, .sidebar-resizer { display: none; }
 
   /* Both panels float above the editor, narrower than the screen. */
@@ -1314,12 +1314,12 @@ body.is-tab-dragging .chat-tab-x { cursor: grabbing; }
      while a drawer is open switches panels instead of just closing it. */
   .scrim { left: 48px; }
 
-  /* Open states — driven by .sidebar-open / .chat-open on .body. */
-  .body.sidebar-open .sidebar,
-  .body.chat-open .chat { transform: none; visibility: visible; }
+  /* Open states — driven by .sidebar-open / .chat-open on .workbench. */
+  .workbench.sidebar-open .sidebar,
+  .workbench.chat-open .chat { transform: none; visibility: visible; }
 
   /* The desktop collapse rules must not hide the drawer on mobile. */
-  .body.chat-collapsed .chat { display: flex; }
+  .workbench.chat-collapsed .chat { display: flex; }
 
   /* Comfortable tap targets. */
   .act-btn { width: 44px; height: 44px; }

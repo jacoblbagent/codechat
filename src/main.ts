@@ -212,7 +212,7 @@ function hostEls() {
 if (import.meta.env.DEV) installHostUi()
 
 const els = {
-  body: document.querySelector('.body') as HTMLElement,
+  body: document.querySelector('.workbench') as HTMLElement,
   tree: $('tree'),
   tabs: $('tabs'),
   editorHost: $('editor'),
