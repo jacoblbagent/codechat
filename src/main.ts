@@ -1546,9 +1546,19 @@ function snippetHtml(hit: SearchHit, needle: string, chars: number): string {
      broken highlight, so a partial occurrence at the tail is dropped instead
      of drawn. The row's own match sits a third of the way in, so it is whole. */
   let end = start + chars
+  /* The row's own match must be on screen. When the window ends inside it,
+     slide the window right so the match ends at the right edge (its start
+     still shows if the needle is wider than the window). */
+  const firstEnd = hit.col + needle.length
+  if (firstEnd > end) {
+    start = Math.max(lead, Math.min(hit.col, firstEnd - chars))
+    end = start + chars
+  }
+  /* Later occurrences that would be cut in half at the tail are dropped, not
+     drawn. Never drop the row's own match (it is the reason the row exists). */
   const lowerNeedle = needle.toLowerCase()
   const boundary = lowerFull.indexOf(lowerNeedle, Math.max(start, end - lowerNeedle.length + 1))
-  if (boundary !== -1 && boundary < end && boundary - start > 4) end = boundary
+  if (boundary !== -1 && boundary >= firstEnd && boundary < end && boundary - start > 4) end = boundary
   return (start > lead ? '…' : '') + markMatches(full.slice(start, end), needle)
 }
 
