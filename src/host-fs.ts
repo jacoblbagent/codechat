@@ -32,6 +32,14 @@ export interface HostTree {
   skipped: number
 }
 
+/** A file another app linked to, plus the repository that holds it. */
+export interface HostOpen {
+  file: string
+  root: string
+  /** The file's path inside `root`, which is what the workspace and tabs use. */
+  path: string
+}
+
 const BASE = ((import.meta.env.BASE_URL as string) ?? '/').replace(/\/+$/, '')
 /** Build-time flag: true on the dev server, false in anything built for static hosting. */
 const BRIDGE = import.meta.env.DEV
@@ -93,6 +101,15 @@ export async function hostList(dir: string): Promise<{ path: string; parent: str
 /** One request for the whole folder — far quicker than a fetch per file. */
 export async function hostTree(dir: string): Promise<HostTree> {
   return request(`tree?path=${encodeURIComponent(dir)}`)
+}
+
+/**
+ * Resolve a file another app linked to into the repository that contains it —
+ * one request, because walking up to `.git` in the browser would mean listing
+ * every level of the path first.
+ */
+export async function hostOpenFile(path: string): Promise<HostOpen> {
+  return request(`open?path=${encodeURIComponent(path)}`)
 }
 
 export function lastHostPath(): string {

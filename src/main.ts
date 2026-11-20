@@ -30,6 +30,7 @@ import {
   hostFileHandle,
   hostInfo,
   hostList,
+  hostOpenFile,
   hostRootOf,
   hostTree,
   joinPath,
@@ -2622,6 +2623,39 @@ async function openHostFolder(path?: string): Promise<void> {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════
+   Deep link — `?open=<absolute path>`
+   ══════════════════════════════════════════════════════════════ */
+
+/**
+ * Open a file handed over by another app, e.g. a Hermes tool card's "Open in
+ * CodeChat" link on a write_file/patch call. The path is absolute, so the
+ * bridge resolves the repository that holds it (host-fs-server.ts `open`), the
+ * repo becomes the workspace and the file's tab is revealed.
+ *
+ * Only the dev server has a filesystem behind it; a static build answers the
+ * same URL with its starter project, so the parameter is ignored rather than
+ * failing. It is consumed once and then dropped from the address bar — the
+ * deep link is a handover, not a mode, and a reload should not drag the tab
+ * back to the file an agent happened to edit earlier.
+ */
+async function openLinkedFile(): Promise<boolean> {
+  const wanted = new URLSearchParams(location.search).get('open')
+  if (!wanted) return false
+  if (!(await hostAvailable())) return false
+  try {
+    const target = await hostOpenFile(wanted)
+    const { opened, skipped } = await loadHostTree(target.root)
+    applyDirectory(opened, skipped, loadSession(workspace.rootName))
+    openFile(target.path, true)
+  } catch (err) {
+    toast(`Could not open ${wanted}: ${(err as Error).message}`, 'err')
+    return false
+  }
+  history.replaceState(null, '', location.pathname + location.hash)
+  return true
+}
+
 /**
  * Put the host folder from the last session back. The path is in localStorage,
  * so there is no permission to re-ask for and nothing to click — but a folder
@@ -3363,9 +3397,11 @@ void loadStarterProject()
 
 // Then, if a real folder was open last time, put it back over it — the starter
 // loads first so the IDE is usable immediately either way. A host-bridge folder
-// is remembered by path and wins over the picker's IndexedDB handle.
+// is remembered by path and wins over the picker's IndexedDB handle, and a
+// deep link (`?open=…`, from a Hermes tool card) wins over both.
 void (async () => {
   if (import.meta.env.DEV) {
+    if (await openLinkedFile()) return
     if (await restoreHostFolder()) return
   }
   await restoreLastFolder()

@@ -13,13 +13,13 @@
  * of it, and symlinked directories are not descended into.
  */
 
-import { promises as fsp, realpathSync } from 'node:fs'
+import { existsSync, promises as fsp, realpathSync } from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
 
-const MAX_FILE = 512 * 1024
+const MAX_FILE = 2 * 1024 * 1024   // a deep link must reach a big single-file app too
 const MAX_TOTAL = 24 * 1024 * 1024
 const MAX_FILES = 6000
 
@@ -224,6 +224,33 @@ async function route(
       res.setHeader('Content-Type', 'text/plain; charset=utf-8')
       res.setHeader('Cache-Control', 'no-store')
       res.end(await fsp.readFile(file, 'utf8'))
+      return true
+    }
+
+    /**
+     * A deep link from another app (`?open=<absolute path>`): name the file AND
+     * the repository that holds it, so the client loads one repo tree and reveals
+     * one tab. Resolving the repo here, not in the browser, is what keeps a link
+     * from having to walk all of `$HOME` to find a folder to open. A file with no
+     * `.git` above it falls back to its own directory.
+     */
+    case 'open': {
+      const file = confine(root, url.searchParams.get('path') || '')
+      const info = await fsp.stat(file)
+      if (!info.isFile()) throw Object.assign(new Error('Not a file'), { status: 400 })
+      let repo = path.dirname(file)
+      for (let dir = path.dirname(file); within(root, dir); dir = path.dirname(dir)) {
+        if (existsSync(path.join(dir, '.git'))) {
+          repo = dir
+          break
+        }
+        if (dir === root) break
+      }
+      send(res, 200, {
+        file,
+        root: repo,
+        path: path.relative(repo, file).split(path.sep).join('/'),
+      })
       return true
     }
 
